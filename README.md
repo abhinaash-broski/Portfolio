@@ -14,35 +14,36 @@ The design is a minimal "notebook" theme: a cream page on a dotted desk backgrou
 
 | Post | File |
 |---|---|
-| Singular Value Decomposition: Finding the Hidden Geometry Inside a Matrix | `assets/html/svd.html` |
-| Convolution: The Mathematics Behind Sliding, Smoothing, and Pattern Matching | `assets/html/convolution.html` |
-| Geometric Deep Learning, Explained: Why Symmetry Is the Real Architecture | `assets/html/geometric-deep-learning.html` |
+| Singular Value Decomposition: Finding the Hidden Geometry Inside a Matrix | `posts/svd.html` |
+| Convolution: The Mathematics Behind Sliding, Smoothing, and Pattern Matching | `posts/convolution.html` |
+| Geometric Deep Learning, Explained: Why Symmetry Is the Real Architecture | `posts/geometric-deep-learning.html` |
 
 ## Project structure
 
 ```
 .
 ├── index.html                  Home: featured post + recent posts
-├── CNAME                       Custom domain for GitHub Pages
-└── assets/
-    ├── html/
-    │   ├── about.html          Bio
-    │   ├── posts.html          Full post index
-    │   ├── resume.html         Academic CV
-    │   ├── example-post.html   Template post (placeholder content)
-    │   ├── <post>.html         One file per blog post
-    │   └── profile.png
-    └── styles/
-        ├── style.css           Global theme: colours, fonts, layout, header, footer
-        ├── post.css            Shared styles for long-form posts (TOC, math, tables, notes)
-        ├── article.css         Post cards on the home and posts pages
-        ├── about.css           About page
-        └── example-post.css    Template post
+├── about.html                  Bio
+├── posts.html                  Full post index
+├── resume.html                 Academic CV
+├── posts/
+│   ├── <post>.html             One file per blog post
+│   └── example-post.html       Template post (placeholder content)
+├── assets/
+│   ├── css/
+│   │   ├── style.css           Global theme: colours, fonts, layout, header, footer
+│   │   ├── post.css            Shared styles for long-form posts (TOC, math, tables, notes)
+│   │   ├── article.css         Post cards on the home and posts pages
+│   │   ├── about.css           About page
+│   │   └── example-post.css    Template post
+│   └── images/
+│       └── profile.png
+└── CNAME                       Custom domain for GitHub Pages
 ```
 
 ## Adding a post
 
-1. Copy an existing post (e.g. `assets/html/svd.html`) to `assets/html/<slug>.html` and replace the content. Keep the `<head>` — it links `style.css` and `post.css` and configures MathJax.
+1. Copy an existing post (e.g. `posts/svd.html`) to `posts/<slug>.html` and replace the content. Keep the `<head>` — it links `style.css` and `post.css` and configures MathJax.
 2. Write maths as LaTeX. Inline: `$A = U\Sigma V^T$`. Display: wrap in `<div class="_math-block">$$ … $$</div>` so wide equations scroll instead of overflowing on narrow screens.
 3. Escape HTML-sensitive characters inside maths: use `&lt;` and `&gt;` for `<` and `>`, and `&amp;` for the `&` alignment character in `aligned` environments.
 4. Available building blocks (all in `post.css`):
@@ -51,7 +52,7 @@ The design is a minimal "notebook" theme: a cream page on a dotted desk backgrou
    - `._note` with a `._note-label` — margin note for caveats and technical asides
    - `._table-wrap` around a `<table>` — ledger-style table
    - `._list` — spaced list
-5. Add a card for the post at the top of `assets/html/posts.html`, and update the featured/recent cards in `index.html`.
+5. Add a card for the post at the top of `posts.html`, and update the featured/recent cards in `index.html`.
 
 ## Running locally
 
