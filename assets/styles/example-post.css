@@ -10,15 +10,20 @@
 	border-block-end: var(--border-shorthand);
 }
 
+._title-date h2 {
+	margin: 0;
+}
+
 ._image {
 	margin-block: 1em;
 }
 
 ._quote {
-	border-inline-start: 0.125rem solid var(--border-color);
+	border-inline-start: 0.1875rem solid var(--accent);
 	margin-inline: 0;
-	padding-inline-start: 0.6875rem;
+	padding-inline-start: 0.9375rem;
 	padding-block: 0.125rem;
+	font-style: italic;
 }
 
 ._bottom-navigation {
@@ -34,6 +39,10 @@
 	margin: 0;
 	padding: 0;
 	list-style-type: none;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
 }
 
 ._bottom-navigation a { text-decoration: none; }

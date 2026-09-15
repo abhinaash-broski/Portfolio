@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="author" content="Abhinaash Tiwari">
+	<meta name="description" content="A long read on grids, groups, graphs, geodesics and gauges: why most successful neural network architectures follow from the symmetries of the data's domain, based on the 2021 Geometric Deep Learning paper by Bronstein, Bruna, Cohen and Veličković.">
+	<meta name="keywords" content="geometric deep learning, symmetry, group theory, equivariance, invariance, graph neural networks, convolutional neural networks, gauge equivariance, Erlangen programme, message passing, Weisfeiler-Lehman">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Geometric Deep Learning, Explained | Abhinaash Blog</title>
+
+	<link rel="icon" type="image/x-icon" href="#">
+	<link rel="stylesheet" type="text/css" href="../styles/style.css">
+	<link rel="stylesheet" type="text/css" href="../styles/post.css">
+
+	<script>
+		window.MathJax = {
+			tex: {
+				inlineMath: [['$', '$']],
+				displayMath: [['$$', '$$']]
+			}
+		};
+	</script>
+	<script defer id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+</head>
+<body>
+	<header class="container__">
+		<h1 class="__header-title"><a href="../../index.html">Abhinaash Blog</a></h1>
+		<nav class="__header-nav">
+			<ul>
+				<li><a href="../../index.html">Home</a></li>
+				<li><a href="./about.html">About</a></li>
+				<li><a class="current-page__" href="./posts.html">Posts</a></li>
+				<li><a href="./resume.html">Resume</a></li>
+			</ul>
+		</nav>
+	</header>
+
+	<main class="container__">
+		<section class="__post">
+			<img class="_thumbnail" src="https://picsum.photos/id/180/800/400?grayscale" width="800" height="400" alt="Article thumbnail.">
+			<div class="_title-date">
+				<h2>Geometric Deep Learning, Explained: Why Symmetry Is the Real Architecture</h2>
+				<time datetime="2026-09-15"><i>September 15, 2026</i></time>
+			</div>
+
+			<p class="_byline"><em>A long read on grids, groups, graphs, geodesics and gauges. Based on the 2021 book-length paper by Michael Bronstein, Joan Bruna, Taco Cohen and Petar Veličković (arXiv:2104.13478).</em></p>
+
+			<p>The first time I tried to learn deep learning properly, it felt like walking into a zoo with no signs. CNNs over here. RNNs and LSTMs in that cage. Graph neural networks in a new enclosure that kept growing. Transformers somewhere near the entrance, drawing all the crowds. Every architecture came with its own vocabulary, its own tricks, and its own origin story.</p>
+
+			<p>What I wanted was a map. Geometric Deep Learning (GDL) is the best map I've found so far.</p>
+
+			<p>The claim is simple enough to fit on a sticky note: <strong>most successful neural architectures follow from the symmetries of the data's domain.</strong> Tell me what your data lives on and which transformations shouldn't change the answer, and I can tell you, roughly, what your network should look like.</p>
+
+			<p>This post walks through that idea from the ground up. There's math, but I'll try to keep each piece motivated.</p>
+
+			<div class="_toc">
+				<p>Contents</p>
+				<ol>
+					<li><a href="#s1">A 150-year-old idea</a></li>
+					<li><a href="#s2">Why we need priors at all: the curse of dimensionality</a></li>
+					<li><a href="#s3">The three geometric priors</a></li>
+					<li><a href="#s4">The blueprint</a></li>
+					<li><a href="#s5">The five Gs</a></li>
+					<li><a href="#s6">The architectures, derived</a></li>
+					<li><a href="#s7">How powerful are GNNs? The Weisfeiler&ndash;Lehman story</a></li>
+					<li><a href="#s8">Where this shows up in practice</a></li>
+					<li><a href="#s9">A short history</a></li>
+					<li><a href="#s10">What I take away from all this</a></li>
+					<li><a href="#further-reading">Further reading</a></li>
+				</ol>
+			</div>
+
+			<h3 class="_secondary-title" id="s1">1. A 150-year-old idea</h3>
+
+			<p>In 1872, Felix Klein had a problem. Geometry had split into a mess of competing systems: Euclidean, affine, projective, hyperbolic. Mathematicians argued about which one was "true."</p>
+
+			<p>Klein's fix, now called the Erlangen Programme, was to stop arguing and start classifying. A geometry, he said, is the study of whatever stays unchanged under some group of transformations.</p>
+
+			<ul class="_list">
+				<li>Euclidean geometry: lengths and angles, preserved by rotations and translations.</li>
+				<li>Affine geometry: parallel lines, preserved by the larger affine group.</li>
+				<li>Projective geometry: incidence and cross-ratios, preserved by an even larger group.</li>
+			</ul>
+
+			<p>Bigger group, fewer invariants. And suddenly the relationships between geometries were just relationships between groups.</p>
+
+			<p>The idea spread well beyond geometry. Noether showed that symmetries give conservation laws. Physicists classified particles as representations of symmetry groups. The Standard Model is a gauge theory.</p>
+
+			<p>GDL applies the same move to neural networks. Instead of a zoo, we get a small set of principles, and architectures become consequences of those principles.</p>
+
+			<h3 class="_secondary-title" id="s2">2. Why we need priors at all: the curse of dimensionality</h3>
+
+			<p>Before talking about symmetry, it helps to see why "just use a big network" isn't enough.</p>
+
+			<h4 class="_tertiary-title">The learning setup</h4>
+
+			<p>We have samples $x_i$ drawn from some distribution $P$ and labels $y_i = f^*(x_i)$. We pick a model $f$ from a hypothesis class $\mathcal{F}$ to minimise the risk</p>
+
+			<div class="_math-block">$$
+\mathcal{R}(f) = \mathbb{E}_{x \sim P}\, \ell\big(f(x), f^*(x)\big).
+$$</div>
+
+			<p>Our error roughly splits into three parts:</p>
+
+			<div class="_math-block">$$
+\text{error} \;\approx\; \underbrace{\text{approximation}}_{\text{can } \mathcal{F} \text{ express } f^*?} + \underbrace{\text{statistical}}_{\text{enough data?}} + \underbrace{\text{optimisation}}_{\text{can we find it?}}
+$$</div>
+
+			<p>A richer model class helps the first term and hurts the second. A good inductive bias shrinks both at once.</p>
+
+			<h4 class="_tertiary-title">Universal approximation doesn't save us</h4>
+
+			<p>The universal approximation theorem says a two-layer network</p>
+
+			<div class="_math-block">$$
+f(x) = \sum_{j=1}^m a_j\, \sigma(\langle w_j, x\rangle + b_j)
+$$</div>
+
+			<p>can approximate any continuous function on a compact set, as long as $\sigma$ isn't a polynomial. Great. But it says nothing about how many neurons you need or how many samples it takes to find them.</p>
+
+			<h4 class="_tertiary-title">Lipschitz functions are already hopeless</h4>
+
+			<p>Take the gentlest assumption imaginable: $f^*$ is 1-Lipschitz, meaning $|f(x) - f(x')| \le \|x - x'\|$.</p>
+
+			<p>Here's the problem. Chop the cube $[0,1]^d$ into little cells of side $r$. There are $r^{-d}$ of them. In each cell, put a tiny bump pointing up or down at random. Every such function is 1-Lipschitz. If a cell has no training points in it, you have zero information about which way its bump points.</p>
+
+			<p>Work it through and you get an error of about $N^{-2/d}$ with $N$ samples. To reach error $\epsilon$, you need</p>
+
+			<div class="_math-block">$$
+N \gtrsim \epsilon^{-d/2}.
+$$</div>
+
+			<p>For a small image, $d$ is in the tens of thousands. That number of samples doesn't exist.</p>
+
+			<p>Smoothness alone won't rescue us either. (Barron's classical result does give a dimension-free rate for a special class of functions, but that class is too narrow for things like "is there a cat in this photo?")</p>
+
+			<p>So we need a different kind of prior. Not "the function is smooth," but "the input has structure." That's where geometry comes in.</p>
+
+			<h3 class="_secondary-title" id="s3">3. The three geometric priors</h3>
+
+			<h4 class="_tertiary-title">Signals on domains</h4>
+
+			<p>The key shift is to stop viewing an input as a flat vector in $\mathbb{R}^d$. Instead, treat it as a <strong>signal on a domain</strong>:</p>
+
+			<div class="_math-block">$$
+x : \Omega \to \mathcal{C}.
+$$</div>
+
+			<p>Here $\Omega$ is the domain and $\mathcal{C}$ is the channel space. Some examples:</p>
+
+			<ul class="_list">
+				<li>An RGB image is a signal on a 2D grid with $\mathcal{C} = \mathbb{R}^3$.</li>
+				<li>A molecule is a signal on a graph.</li>
+				<li>Global temperature is a signal on the sphere.</li>
+			</ul>
+
+			<p>The space of signals $\mathcal{X}(\Omega, \mathcal{C})$ is huge, but the structure of $\Omega$ tells us which functions of $x$ make sense.</p>
+
+			<h4 class="_tertiary-title">Prior 1: Symmetry</h4>
+
+			<p>A symmetry is a transformation that leaves something we care about unchanged. Symmetries always form a <strong>group</strong>.</p>
+
+			<p>A group $\mathfrak{G}$ acting on the domain automatically acts on signals:</p>
+
+			<div class="_math-block">$$
+(\mathfrak{g}.x)(u) = x(\mathfrak{g}^{-1} u).
+$$</div>
+
+			<p>(The inverse is there so that composing two transformations works out in the right order. If you shift an image right by $v$, the pixel now at $u$ used to be at $u - v$.)</p>
+
+			<p>This action is linear, so it's a <strong>representation</strong> $\rho(\mathfrak{g})$. For a set of $n$ elements, it's just a permutation matrix acting on the rows of $\mathbf{X}$.</p>
+
+			<p>Now the two words that matter most in this whole field:</p>
+
+			<ul class="_list">
+				<li><strong>Invariant</strong>: $f(\rho(\mathfrak{g})x) = f(x)$. The output doesn't change. Image classification should be invariant to shifts.</li>
+				<li><strong>Equivariant</strong>: $F(\rho(\mathfrak{g})x) = \rho'(\mathfrak{g})F(x)$. The output changes in the same way as the input. Segmentation should be equivariant to shifts: move the cat, the mask moves too.</li>
+			</ul>
+
+			<p>A handy fact that the whole blueprint relies on: compose equivariant maps and you get an equivariant map. Put an invariant map at the end and the whole thing is invariant.</p>
+
+			<p>Why does this help statistically? If $f^*$ is invariant, it only depends on the <em>orbit</em> of $x$, not $x$ itself. The space of orbits is smaller, so you need fewer samples to cover it.</p>
+
+			<h4 class="_tertiary-title">A detour into graphs: isomorphism</h4>
+
+			<p>On graphs, the symmetry isn't a geometric motion. It's relabelling. Node order is arbitrary, so if $\mathbf{P}$ is a permutation matrix,</p>
+
+			<div class="_math-block">$$
+(\mathbf{X}, \mathbf{A}) \mapsto (\mathbf{P}\mathbf{X},\; \mathbf{P}\mathbf{A}\mathbf{P}^\top)
+$$</div>
+
+			<p>describes the <em>same</em> graph. A graph-level model must satisfy $f(\mathbf{P}\mathbf{X}, \mathbf{P}\mathbf{A}\mathbf{P}^\top) = f(\mathbf{X}, \mathbf{A})$, and a node-level model must satisfy $F(\mathbf{P}\mathbf{X}, \mathbf{P}\mathbf{A}\mathbf{P}^\top) = \mathbf{P}F(\mathbf{X}, \mathbf{A})$.</p>
+
+			<p>We'll come back to this later, because it limits what graph networks can tell apart.</p>
+
+			<h4 class="_tertiary-title">Prior 2: Deformation stability</h4>
+
+			<p>Real data are only approximately symmetric. A slightly squished "7" is still a 7.</p>
+
+			<p>You might think: just demand invariance to all smooth deformations. That fails badly, because you can morph almost any image into any other through small steps. Instead, we ask for <strong>stability</strong>: the output should change in proportion to how far the deformation $\tau$ is from a true symmetry,</p>
+
+			<div class="_math-block">$$
+\|f(\tau.x) - f(x)\| \le C\, c(\tau)\, \|x\|.
+$$</div>
+
+			<p>Here $c(\tau)$ is zero for exact symmetries and grows with distortion (for shifts, something like $\|\nabla \tau\|_\infty$).</p>
+
+			<p>The classic cautionary tale is the Fourier transform. Its magnitude $|\hat{x}(\omega)|$ is perfectly shift-invariant. But stretch the signal slightly and high frequencies move a lot, in proportion to $|\omega|$. So global Fourier features are invariant but unstable. Wavelets, which are localised in both space and frequency, don't have this problem.</p>
+
+			<p>For domains that change (different graphs, different meshes), the analogous requirement is that approximately isomorphic domains give similar outputs.</p>
+
+			<h4 class="_tertiary-title">Prior 3: Scale separation</h4>
+
+			<p>Physics tends to be hierarchical. Nearby things interact strongly. Far-away things interact through summaries.</p>
+
+			<p>Formally, we can <strong>coarsen</strong> a domain: average locally, subsample, and get a smaller domain $\Omega'$. If the target function can be written as $f^* \approx f' \circ P$ with $P$ the coarsening, the effective dimension drops.</p>
+
+			<p>Multiresolution analysis and wavelets are the classic tools here. Mallat's scattering transform stacks wavelet filters and absolute values:</p>
+
+			<div class="_math-block">$$
+Sx = \big\{\, \big| |x \star \psi_{j_1}| \star \psi_{j_2} \big| \cdots \star \phi_J \,\big\}.
+$$</div>
+
+			<p>It's provably shift-invariant and stable to deformations. If that looks a lot like a CNN with fixed filters, that's because it basically is. It's the mathematical ancestor.</p>
+
+			<h3 class="_secondary-title" id="s4">4. The blueprint</h3>
+
+			<p>Here's the part that ties it together.</p>
+
+			<p><strong>First, linear isn't enough.</strong> If $f$ is linear and $\mathfrak{G}$-invariant for a compact group, then</p>
+
+			<div class="_math-block">$$
+f(x) = f\!\left(\int_{\mathfrak{G}} \mathfrak{g}.x \; d\mu(\mathfrak{g})\right).
+$$</div>
+
+			<p>It can only see the group-averaged signal. For images under shifts, that's the average colour. Useless.</p>
+
+			<p><strong>Second, linear equivariant maps are rich, and nonlinearities keep equivariance.</strong> If $B$ is equivariant and $\sigma$ is applied pointwise, then $\sigma \circ B$ is still equivariant. Pointwise functions don't care where a value sits.</p>
+
+			<p><strong>Third, locality gives stability.</strong> If each output location only looks at a small neighbourhood (the receptive field), and we stack layers with coarsening in between, the receptive field grows while each step stays local.</p>
+
+			<p>Put it together and you get the <strong>Geometric Deep Learning Blueprint</strong>. The building blocks:</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead>
+						<tr><th>Block</th><th>What it does</th></tr>
+					</thead>
+					<tbody>
+						<tr><td>Linear $\mathfrak{G}$-equivariant layer $B$</td><td>$B(\mathfrak{g}.x) = \mathfrak{g}.B(x)$</td></tr>
+						<tr><td>Nonlinearity $\sigma$</td><td>Applied pointwise</td></tr>
+						<tr><td>Local pooling $P$</td><td>Coarsens the domain</td></tr>
+						<tr><td>Invariant layer $A$</td><td>Global pooling, $A(\mathfrak{g}.x) = A(x)$</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p>And the model:</p>
+
+			<div class="_math-block">$$
+f = A \circ \sigma_J \circ B_J \circ P_{J-1} \circ \cdots \circ P_1 \circ \sigma_1 \circ B_1.
+$$</div>
+
+			<p>Drop $A$ if you want an equivariant output.</p>
+
+			<p>It's worth noticing that shallow invariant networks are often already universal (Deep Sets proved this for permutations). The deep, local, multiscale structure isn't there for expressivity. It's there because it gets invariance, stability and scale separation all at once.</p>
+
+			<p>One more distinction: sometimes the domain is <strong>fixed</strong> (every image lives on the same grid), and sometimes it's <strong>part of the input</strong> (every molecule has its own graph). The second case is where isomorphism, rather than transformation, becomes the key notion.</p>
+
+			<h3 class="_secondary-title" id="s5">5. The five Gs</h3>
+
+			<p>Here's the lay of the land before we dig in.</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead>
+						<tr><th>Domain</th><th>Symmetry</th><th>Architectures</th></tr>
+					</thead>
+					<tbody>
+						<tr><td>Sets</td><td>Permutations</td><td>Deep Sets, Transformers</td></tr>
+						<tr><td>Graphs</td><td>Permutations</td><td>GCN, GAT, MPNN</td></tr>
+						<tr><td>Grids</td><td>Translations</td><td>CNNs</td></tr>
+						<tr><td>Groups / homogeneous spaces</td><td>Global group (e.g. SO(3))</td><td>Group CNNs, Spherical CNNs</td></tr>
+						<tr><td>Manifolds</td><td>Isometries</td><td>Intrinsic CNNs</td></tr>
+						<tr><td>Gauges / bundles / meshes</td><td>Local frame changes</td><td>Gauge-equivariant CNNs</td></tr>
+						<tr><td>Geometric graphs</td><td>Permutations × E(3)</td><td>Equivariant GNNs</td></tr>
+						<tr><td>Sequences</td><td>Time warping</td><td>RNNs, LSTMs, GRUs</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<h4 class="_tertiary-title">5.1 Graphs and sets</h4>
+
+			<p><strong>Sets first.</strong> A set is a graph with no edges. Zaheer et al. showed that permutation-invariant functions on sets can be written as</p>
+
+			<div class="_math-block">$$
+f(\mathbf{X}) = \phi\Big(\sum_u \psi(\mathbf{x}_u)\Big).
+$$</div>
+
+			<p>And the only linear equivariant maps (with scalar channels) are</p>
+
+			<div class="_math-block">$$
+\mathbf{x} \mapsto \alpha \mathbf{x} + \beta\, \mathbf{1}\mathbf{1}^\top \mathbf{x}.
+$$</div>
+
+			<p>Each element sees itself and the sum of everyone else. That's it. Sets have no notion of "near."</p>
+
+			<p><strong>Graphs add neighbourhoods.</strong> The general recipe is a shared function applied at each node:</p>
+
+			<div class="_math-block">$$
+\mathbf{h}_u = \phi\big(\mathbf{x}_u,\; \{\!\{\mathbf{x}_v : v \in \mathcal{N}_u\}\!\}\big),
+$$</div>
+
+			<p>where $\phi$ doesn't care about the order of the neighbour multiset. Any such layer is permutation-equivariant.</p>
+
+			<p>This comes in three flavours, each more expressive than the last:</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+\text{Convolutional:} &\quad \mathbf{h}_u = \phi\Big(\mathbf{x}_u, \textstyle\bigoplus_{v} c_{uv}\, \psi(\mathbf{x}_v)\Big)\\
+\text{Attentional:} &\quad \mathbf{h}_u = \phi\Big(\mathbf{x}_u, \textstyle\bigoplus_{v} a(\mathbf{x}_u, \mathbf{x}_v)\, \psi(\mathbf{x}_v)\Big)\\
+\text{Message passing:} &\quad \mathbf{h}_u = \phi\Big(\mathbf{x}_u, \textstyle\bigoplus_{v} \psi(\mathbf{x}_u, \mathbf{x}_v)\Big)
+\end{aligned}
+$$</div>
+
+			<p>In the first, weights are fixed by the graph. In the second, they're learned scalars. In the third, the message itself is a learned vector. More expressive isn't always better: convolutional layers are cheap and often generalise well when neighbours tend to be similar.</p>
+
+			<p><strong>Graph spectra.</strong> The Laplacian $\boldsymbol{\Delta} = \mathbf{D} - \mathbf{A}$ measures how much a signal varies across edges:</p>
+
+			<div class="_math-block">$$
+\mathbf{x}^\top \boldsymbol{\Delta}\mathbf{x} = \tfrac{1}{2}\sum_{u,v} a_{uv}(x_u - x_v)^2.
+$$</div>
+
+			<p>Its eigenvectors act like Fourier modes on the graph. And since the Laplacian itself is permutation-equivariant, any polynomial $p(\boldsymbol{\Delta})$ gives you an equivariant layer for free.</p>
+
+			<h4 class="_tertiary-title">5.2 Grids: where convolution comes from</h4>
+
+			<p>This is my favourite result in the whole framework, because it's so clean.</p>
+
+			<p>Take a 1D cyclic grid of $n$ points. The shift operator $\mathbf{S}$ moves every value one step: $(\mathbf{S}\mathbf{x})_u = x_{u-1}$.</p>
+
+			<p><strong>Theorem.</strong> A linear map $\mathbf{B}$ commutes with $\mathbf{S}$ if and only if it's a convolution.</p>
+
+			<p><strong>Proof.</strong> Convolutions are polynomials in $\mathbf{S}$, so they commute with it. For the other direction, let $\boldsymbol{\theta} = \mathbf{B}\mathbf{e}_0$. Every basis vector is a shift of $\mathbf{e}_0$, so</p>
+
+			<div class="_math-block">$$
+\mathbf{B}\mathbf{e}_k = \mathbf{B}\mathbf{S}^k \mathbf{e}_0 = \mathbf{S}^k \mathbf{B}\mathbf{e}_0 = \mathbf{S}^k \boldsymbol{\theta}.
+$$</div>
+
+			<p>That's exactly what a convolution with filter $\boldsymbol{\theta}$ does. Done.</p>
+
+			<p>So convolution, including weight sharing, isn't a design choice. It's forced on you by asking for shift equivariance. Add locality and each layer has a handful of parameters instead of $n^2$.</p>
+
+			<p><strong>Fourier falls out too.</strong> All convolutions commute with each other, so they share eigenvectors. Those eigenvectors are the complex exponentials</p>
+
+			<div class="_math-block">$$
+\boldsymbol{\varphi}_k = \tfrac{1}{\sqrt{n}}\big(1, e^{2\pi i k/n}, \dots, e^{2\pi i k (n-1)/n}\big),
+$$</div>
+
+			<p>and in that basis every convolution is diagonal. That's the convolution theorem: $\widehat{x \star \theta} = \hat{x} \cdot \hat{\theta}$ (up to a normalising constant).</p>
+
+			<p>The deeper reason: exponentials are the characters of the translation group. Fourier analysis <em>is</em> the representation theory of shifts. That observation is what lets the whole idea generalise.</p>
+
+			<h4 class="_tertiary-title">5.3 Groups and homogeneous spaces</h4>
+
+			<p>A homogeneous space is a domain where the group can move any point to any other. The sphere is the standard example: rotations in $\mathrm{SO}(3)$ can take any point to any other point, so $\mathbb{S}^2 \cong \mathrm{SO}(3)/\mathrm{SO}(2)$.</p>
+
+			<p>Write the ordinary convolution as "correlate the signal with a shifted filter," then swap "shift" for "any group element":</p>
+
+			<div class="_math-block">$$
+(x \star \theta)(\mathfrak{g}) = \langle x, \rho(\mathfrak{g})\theta\rangle = \int_\Omega x(u)\, \theta(\mathfrak{g}^{-1}u)\, du.
+$$</div>
+
+			<p>One subtle thing: the output lives on the <strong>group</strong>, not the domain. For the sphere, you feed in a 2D signal and get back a function on the 3D rotation group. Later layers convolve on the group directly.</p>
+
+			<p>Equivariance is a one-liner if $\rho$ is unitary:</p>
+
+			<div class="_math-block">$$
+\langle \rho(\mathfrak{h})x, \rho(\mathfrak{g})\theta\rangle = \langle x, \rho(\mathfrak{h}^{-1}\mathfrak{g})\theta\rangle.
+$$</div>
+
+			<p>For compact groups, the Peter&ndash;Weyl theorem gives a Fourier theory. The Fourier coefficients become matrices, and the convolution theorem becomes a matrix product. On the sphere, that means spherical harmonics and Wigner D-matrices, and it's how spherical CNNs are computed efficiently.</p>
+
+			<h4 class="_tertiary-title">5.4 Geodesics and manifolds</h4>
+
+			<p>Most shapes aren't homogeneous. A human body has no global symmetry group that slides the elbow onto the knee. For these, we need Riemannian geometry.</p>
+
+			<p>A quick tour:</p>
+
+			<ul class="_list">
+				<li><strong>Tangent space</strong> $T_u\Omega$: the flat space of directions at a point.</li>
+				<li><strong>Riemannian metric</strong> $g_u$: an inner product on each tangent space. From it you get lengths, angles, areas, and geodesic distance.</li>
+				<li><strong>Isometry</strong>: a map that preserves the metric. A person changing pose is approximately an isometry of their body surface. So for shapes, the natural prior is isometry invariance.</li>
+				<li><strong>Gradient, divergence, Laplacian</strong>: the gradient $\nabla x$ is defined through the metric, divergence is its negative adjoint, and the Laplace&ndash;Beltrami operator is $\Delta x = -\mathrm{div}(\nabla x)$. It's intrinsic, so isometries don't change it.</li>
+				<li><strong>Geodesics and the exponential map</strong>: $\exp_u(v)$ walks along the geodesic from $u$ in direction $v$ for unit time. Near the origin, this gives local "polar coordinates" on the surface.</li>
+			</ul>
+
+			<p><strong>Two ways to do convolution on a manifold.</strong></p>
+
+			<p><em>Spectral.</em> Use the Laplacian's eigenfunctions as Fourier modes:</p>
+
+			<div class="_math-block">$$
+(x \star \theta)(u) = \sum_k \hat{x}_k\, \hat{\theta}_k\, \varphi_k(u).
+$$</div>
+
+			<p>The catch: eigenbases are only defined up to sign flips and rotations within repeated eigenvalues, so a filter learned on one shape doesn't transfer to another. The fix is to make the filter a function of the eigenvalue, $\hat\theta_k = p(\lambda_k)$, so the layer becomes $p(\Delta)x$. Now it depends only on the operator, not the basis, and a smooth $p$ gives a localised filter.</p>
+
+			<p><em>Spatial.</em> Unroll a patch with the exponential map and correlate:</p>
+
+			<div class="_math-block">$$
+(x \star \theta)(u) = \int_{T_u\Omega} \theta(v)\, x(\exp_u v)\, dv.
+$$</div>
+
+			<p>The catch here is nastier. To place a 2D filter on the tangent plane, you need to choose which way is "up." There's no canonical choice. On a sphere, the hairy ball theorem says you can't even pick a smooth nonvanishing direction everywhere.</p>
+
+			<p>That frame problem is the whole reason gauges exist.</p>
+
+			<h4 class="_tertiary-title">5.5 Gauges and bundles</h4>
+
+			<p>A <strong>gauge</strong> is a choice of frame (basis) in each tangent space. A <strong>gauge transformation</strong> changes those frames, point by point:</p>
+
+			<div class="_math-block">$$
+\omega'_u = \omega_u \circ \mathfrak{g}_u, \qquad \mathfrak{g}_u \in \mathrm{SO}(2).
+$$</div>
+
+			<p>Here's the key idea, and I think it's the most philosophically interesting bit of the whole framework: <strong>a gauge is not a symmetry of the data.</strong> It's a choice the modeller made. The prediction shouldn't depend on it.</p>
+
+			<p>Features are generalised to <strong>fields of type $\rho$</strong>: their coordinates change under a frame rotation according to a representation, $\mathbf{x}'(u) = \rho(\mathfrak{g}_u^{-1})\mathbf{x}(u)$. Scalars don't change. Vectors rotate. Higher-order features transform in more complex ways.</p>
+
+			<p>To compare features at different points, you first parallel-transport them to a common point. Then a convolution with matrix-valued kernel $\boldsymbol{\theta}$ is gauge-equivariant exactly when</p>
+
+			<div class="_math-block">$$
+\boldsymbol{\theta}(\mathfrak{h}^{-1}\mathbf{v}) = \rho_{\text{out}}(\mathfrak{h}^{-1})\, \boldsymbol{\theta}(\mathbf{v})\, \rho_{\text{in}}(\mathfrak{h}).
+$$</div>
+
+			<p>This is a linear constraint. You solve it once (with circular harmonics for 2D rotations) and learn coefficients in the resulting basis. These are called <strong>steerable kernels</strong>.</p>
+
+			<h4 class="_tertiary-title">5.6 Meshes and geometric graphs</h4>
+
+			<p>Computers don't store smooth manifolds. They store meshes: graphs with triangular faces. On a mesh, the standard Laplacian is the <strong>cotangent Laplacian</strong>:</p>
+
+			<div class="_math-block">$$
+(\Delta \mathbf{x})_u = \frac{1}{a_u}\sum_{v \in \mathcal{N}_u} \tfrac{1}{2}(\cot\alpha_{uv} + \cot\beta_{uv})(x_u - x_v),
+$$</div>
+
+			<p>where $\alpha_{uv}, \beta_{uv}$ are the angles opposite the edge. It only depends on edge lengths (so it's intrinsic), it's permutation-equivariant (so it fits in a GNN), and it converges to the smooth Laplacian as the mesh gets finer. Meshes are nice because they're exactly where graphs and manifolds meet.</p>
+
+			<p><strong>Geometric graphs</strong> are graphs with positions attached, like molecules. Now the symmetry is permutations <em>and</em> rigid motions:</p>
+
+			<div class="_math-block">$$
+(\mathbf{X}, \mathbf{P}) \mapsto (\boldsymbol{\Pi}\mathbf{X},\; \boldsymbol{\Pi}\mathbf{P}\mathbf{R}^\top + \mathbf{1}\mathbf{b}^\top).
+$$</div>
+
+			<p>Energy should be invariant. Forces should rotate with the molecule.</p>
+
+			<h3 class="_secondary-title" id="s6">6. The architectures, derived</h3>
+
+			<p>Now we cash in. Each of these is the blueprint on a particular domain.</p>
+
+			<h4 class="_tertiary-title">CNNs</h4>
+
+			<p>Grid + translations. A conv layer is</p>
+
+			<div class="_math-block">$$
+\mathbf{h}_u = \sigma\Big(\sum_{\mathbf{v}} \boldsymbol{\Theta}_{\mathbf{v}}\, \mathbf{x}_{u+\mathbf{v}} + \mathbf{b}\Big),
+$$</div>
+
+			<p>followed by pooling (which halves the grid), then global pooling at the end. Pooling grows the receptive field exponentially with depth.</p>
+
+			<p>A small honesty note: striding and subsampling break exact shift equivariance. At level $j$ you're only equivariant to shifts by multiples of $2^j$. That's the root of aliasing issues in CNNs.</p>
+
+			<p><strong>ResNets</strong> add skip connections, $\mathbf{h}^{(\ell+1)} = \mathbf{h}^{(\ell)} + \sigma(B_\ell \mathbf{h}^{(\ell)})$. You can read this as a forward Euler step of an ODE, which connects deep nets to classical PDE-based image processing. Skip connections and batch norm both preserve equivariance.</p>
+
+			<p>And <strong>data augmentation</strong>? It encourages invariance but doesn't guarantee it. Built-in equivariance guarantees it for every parameter setting.</p>
+
+			<h4 class="_tertiary-title">Group-equivariant CNNs</h4>
+
+			<p>Three steps: lift the signal onto the group, convolve on the group a few times, then pool.</p>
+
+			<p>A concrete case is the $p4$ group: shifts plus 90&deg; rotations. Each feature map becomes a stack of four, one per orientation. Rotate the input, and every feature map rotates <em>and</em> the four orientation channels cycle.</p>
+
+			<p>For continuous or large groups, storing a function on the whole group is expensive. <strong>Steerable CNNs</strong> keep features on the original domain but give them transformation types, using the kernel constraint from Section 5.5. For 3D, this means spherical harmonics and Clebsch&ndash;Gordan products (Tensor Field Networks).</p>
+
+			<h4 class="_tertiary-title">Graph neural networks</h4>
+
+			<p><strong>Spectral route.</strong> Bruna et al. started with the full spectral filter $\boldsymbol{\Phi}\,\hat\theta(\boldsymbol{\Lambda})\,\boldsymbol{\Phi}^\top$. ChebNet made it practical with Chebyshev polynomials,</p>
+
+			<div class="_math-block">$$
+p(\tilde{\boldsymbol{\Delta}}) = \sum_{k=0}^r \alpha_k T_k(\tilde{\boldsymbol{\Delta}}),
+$$</div>
+
+			<p>which only need sparse matrix products and are exactly $r$-hop local.</p>
+
+			<p><strong>GCN</strong> is ChebNet with $r=1$ and a few simplifications:</p>
+
+			<div class="_math-block">$$
+\mathbf{H} = \sigma\big(\tilde{\mathbf{D}}^{-1/2}\tilde{\mathbf{A}}\tilde{\mathbf{D}}^{-1/2}\mathbf{X}\boldsymbol{\Theta}\big), \quad \tilde{\mathbf{A}} = \mathbf{A} + \mathbf{I}.
+$$</div>
+
+			<p>It's the convolutional flavour.</p>
+
+			<p><strong>GAT</strong> is the attentional flavour:</p>
+
+			<div class="_math-block">$$
+\mathbf{h}_u = \sigma\Big(\sum_{v} \alpha_{uv} \mathbf{W}\mathbf{x}_v\Big), \quad \alpha_{uv} = \mathrm{softmax}_v\big(\mathrm{LeakyReLU}(\mathbf{a}^\top[\mathbf{W}\mathbf{x}_u \,\|\, \mathbf{W}\mathbf{x}_v])\big).
+$$</div>
+
+			<p><strong>MPNN</strong> is the message-passing flavour:</p>
+
+			<div class="_math-block">$$
+\mathbf{m}_{uv} = \psi(\mathbf{h}_u, \mathbf{h}_v, \mathbf{e}_{uv}), \qquad \mathbf{h}'_u = \phi\Big(\mathbf{h}_u, \textstyle\bigoplus_v \mathbf{m}_{uv}\Big).
+$$</div>
+
+			<p>Two known pain points:</p>
+
+			<ul class="_list">
+				<li><strong>Over-smoothing.</strong> Keep averaging and every node drifts toward the same value. Deep GNNs lose the ability to tell nodes apart.</li>
+				<li><strong>Over-squashing.</strong> On tree-like graphs, the number of nodes in a $k$-hop neighbourhood explodes, and all that information has to fit in a fixed-size vector. Long-range dependencies suffer.</li>
+			</ul>
+
+			<p>Fixes include residual connections, rewiring the graph, and adding global attention.</p>
+
+			<h4 class="_tertiary-title">Deep Sets and Transformers</h4>
+
+			<p>Deep Sets is the graph model with no edges. PointNet is the same thing with max-pooling, applied to point clouds.</p>
+
+			<p>Now here's something I found genuinely surprising when I first saw it: <strong>a Transformer is a GNN on a complete graph.</strong> Self-attention,</p>
+
+			<div class="_math-block">$$
+\mathbf{H} = \mathrm{softmax}\!\left(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}\right)\mathbf{V},
+$$</div>
+
+			<p>is the attentional flavour with every node connected to every other. That makes it permutation-equivariant, which means it doesn't know word order.</p>
+
+			<p>That's why Transformers need <strong>positional encodings</strong>. The standard sinusoidal ones,</p>
+
+			<div class="_math-block">$$
+p_{u,2i} = \sin(u / 10000^{2i/d}), \qquad p_{u,2i+1} = \cos(u / 10000^{2i/d}),
+$$</div>
+
+			<p>are Fourier modes on the 1D grid of positions. The grid comes back in through the side door. On graphs, the equivalent trick uses Laplacian eigenvectors, with care about their sign ambiguity.</p>
+
+			<p>If you don't trust the given graph, you can <strong>learn one</strong>: embed the nodes, connect k-nearest neighbours, run a GNN, repeat. That's Dynamic Graph CNN. Attention itself is a soft version of this.</p>
+
+			<h4 class="_tertiary-title">Equivariant message passing</h4>
+
+			<p>For molecules and physical systems, the E(n)-equivariant GNN is a neat design:</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+\mathbf{m}_{uv} &= \psi(\mathbf{f}_u, \mathbf{f}_v, \|\mathbf{p}_u - \mathbf{p}_v\|^2),\\
+\mathbf{f}'_u &= \phi\Big(\mathbf{f}_u, \textstyle\sum_v \mathbf{m}_{uv}\Big),\\
+\mathbf{p}'_u &= \mathbf{p}_u + \textstyle\sum_v (\mathbf{p}_u - \mathbf{p}_v)\, \xi(\mathbf{m}_{uv}).
+\end{aligned}
+$$</div>
+
+			<p>Why it works: distances don't change under rotation, so messages and features are invariant. Relative positions rotate with the input, and they're only ever multiplied by scalars, so the updated positions rotate correctly too.</p>
+
+			<p>Using only distances is simple but loses some information (chirality, directions). Higher-order models carry features that transform like spherical harmonics and combine them with Clebsch&ndash;Gordan coefficients.</p>
+
+			<h4 class="_tertiary-title">Intrinsic mesh CNNs</h4>
+
+			<p>These implement the geodesic convolution on meshes. Around each vertex, build local polar coordinates and a set of soft "pixels" $w_k(u,v)$:</p>
+
+			<div class="_math-block">$$
+(x \star \theta)(u) = \sum_k \theta_k\, \frac{\sum_v w_k(u,v)\, \mathbf{x}_v}{\sum_v w_k(u,v)}.
+$$</div>
+
+			<p>The main difference between methods is how they handle the frame problem:</p>
+
+			<ul class="_list">
+				<li><strong>Geodesic CNN</strong>: try all rotations, take the max. Simple, but throws away orientation.</li>
+				<li><strong>Anisotropic CNN</strong>: use principal curvature directions as the frame.</li>
+				<li><strong>MoNet</strong>: learn the weighting functions as Gaussians. Works on graphs too.</li>
+				<li><strong>Gauge-equivariant mesh CNNs</strong>: steerable kernels plus parallel transport. Keeps orientation information without picking a frame.</li>
+			</ul>
+
+			<h4 class="_tertiary-title">RNNs, and where gates come from</h4>
+
+			<p>A sequence is a signal on a 1D grid that arrives one step at a time. An RNN,</p>
+
+			<div class="_math-block">$$
+\mathbf{h}_t = \tanh(\mathbf{W}\mathbf{h}_{t-1} + \mathbf{U}\mathbf{x}_t + \mathbf{b}),
+$$</div>
+
+			<p>shares weights across time, which makes it shift-equivariant in time. So far, nothing new.</p>
+
+			<p>The interesting symmetry is <strong>time warping</strong>: the same process, sampled at a different or varying speed. This derivation, from Tallec and Ollivier, is one of the most satisfying in the book.</p>
+
+			<p>Start with a continuous-time model:</p>
+
+			<div class="_math-block">$$
+\frac{d\mathbf{h}}{dt} = \tanh(\mathbf{W}\mathbf{h} + \mathbf{U}\mathbf{x} + \mathbf{b}) - \mathbf{h}.
+$$</div>
+
+			<p>Now warp time with some increasing function $\tau$. The chain rule multiplies the right-hand side by $\tau'(t)$. Discretise with step 1:</p>
+
+			<div class="_math-block">$$
+\mathbf{h}_{t+1} = \tau'(t)\, \tanh(\cdots) + \big(1 - \tau'(t)\big)\, \mathbf{h}_t.
+$$</div>
+
+			<p>We don't know $\tau'$. So we learn it from the input and state, and squash it into $(0,1)$:</p>
+
+			<div class="_math-block">$$
+\boldsymbol{\Gamma}_{t+1} = \mathrm{sigmoid}(\mathbf{W}_\Gamma \mathbf{h}_t + \mathbf{U}_\Gamma \mathbf{x}_{t+1} + \mathbf{b}_\Gamma),
+$$</div>
+
+			<div class="_math-block">$$
+\mathbf{h}_{t+1} = \boldsymbol{\Gamma}_{t+1} \odot \tanh(\cdots) + (1 - \boldsymbol{\Gamma}_{t+1}) \odot \mathbf{h}_t.
+$$</div>
+
+			<p>That's a <strong>gate</strong>. Gates aren't an engineering hack. They're what you get when you ask for invariance to time warping.</p>
+
+			<p>It also explains why gated networks remember well: a gate near zero means "time is passing slowly," so the state gets copied forward almost untouched, and gradients survive. And it suggests <strong>chrono initialisation</strong>: set the gate biases so that $1/\Gamma$ covers the range of time scales you expect in your data.</p>
+
+			<h4 class="_tertiary-title">LSTMs</h4>
+
+			<p>The LSTM splits the gate into three (input, forget, output) and adds a memory cell:</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+\mathbf{c}_t &= \mathbf{f}_t \odot \mathbf{c}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{c}}_t,\\
+\mathbf{h}_t &= \mathbf{o}_t \odot \tanh(\mathbf{c}_t).
+\end{aligned}
+$$</div>
+
+			<p>Tie $\mathbf{f}_t = 1 - \mathbf{i}_t$ and you're back to the warping-derived update. Along the direct path, $\partial \mathbf{c}_t / \partial \mathbf{c}_{t-1} = \mathrm{diag}(\mathbf{f}_t)$, so a forget gate near 1 keeps gradients alive. That's why people initialise the forget bias to a positive number. GRUs are a leaner cousin with a merged update gate.</p>
+
+			<p>So on a 1D grid: translation symmetry gives you convolution, time-warping symmetry gives you gating. Same domain, two symmetries, two architectures.</p>
+
+			<h3 class="_secondary-title" id="s7">7. How powerful are GNNs? The Weisfeiler&ndash;Lehman story</h3>
+
+			<p>A permutation-invariant GNN must give isomorphic graphs the same output. The flip side: can it tell <em>non</em>-isomorphic graphs apart?</p>
+
+			<p>The benchmark is the <strong>1-WL test</strong> from 1968. Colour every node by its features, then repeat:</p>
+
+			<div class="_math-block">$$
+c_u^{(t+1)} = \mathrm{hash}\Big(c_u^{(t)},\; \{\!\{c_v^{(t)} : v \in \mathcal{N}_u\}\!\}\Big).
+$$</div>
+
+			<p>If two graphs end up with different colour histograms, they're definitely different. If not, the test can't tell. It fails on some simple cases: two triangles and a hexagon look identical to it, because every node has exactly two neighbours.</p>
+
+			<p><strong>The theorem (Xu et al.; Morris et al., 2019):</strong></p>
+
+			<ol class="_list">
+				<li>No message-passing GNN can distinguish two graphs that 1-WL can't. (By induction: the GNN update sees the same information as the hash.)</li>
+				<li>Some GNNs match 1-WL exactly. You need aggregation that's injective on multisets. Sum works. Mean and max don't. The <strong>Graph Isomorphism Network</strong> does it:</li>
+			</ol>
+
+			<div class="_math-block">$$
+\mathbf{h}_u^{(t+1)} = \mathrm{MLP}\Big((1+\epsilon)\,\mathbf{h}_u^{(t)} + \sum_{v \in \mathcal{N}_u} \mathbf{h}_v^{(t)}\Big).
+$$</div>
+
+			<p>Going beyond 1-WL is an active area: higher-order $k$-WL networks (more powerful, but $O(n^k)$ cost), adding substructure counts like cycles, random or positional features, subgraph methods, and message passing on simplicial and cell complexes.</p>
+
+			<p>I'd add one caution: telling graphs apart is only one axis. A more expressive model isn't automatically one that generalises better.</p>
+
+			<h3 class="_secondary-title" id="s8">8. Where this shows up in practice</h3>
+
+			<ul class="_list">
+				<li><strong>Chemistry and drug discovery.</strong> GNNs predict molecular properties far faster than quantum chemistry calculations. A GNN-based screen helped identify the antibiotic halicin. Energies need invariance; forces need E(3)-equivariance.</li>
+				<li><strong>Drug repositioning.</strong> Knowledge graphs of drugs, targets and diseases, used for link prediction (new uses for old drugs, side-effect prediction).</li>
+				<li><strong>Proteins.</strong> Residue graphs, point clouds and molecular surfaces. Surface-based models like MaSIF predict binding sites. AlphaFold 2 uses attention with geometric structure built in.</li>
+				<li><strong>Recommender systems.</strong> PinSage at Pinterest ran GNNs on graphs with billions of nodes.</li>
+				<li><strong>Traffic.</strong> Road networks with time series on top. Spatio-temporal GNNs are used to estimate travel times at scale.</li>
+				<li><strong>3D vision.</strong> Point-cloud networks and mesh CNNs for shape correspondence and body and face modelling.</li>
+				<li><strong>Games and combinatorial optimisation.</strong> Board states and problem instances as grids or graphs, with their symmetries baked in.</li>
+				<li><strong>Physics.</strong> Learned simulators for particles and meshes. Jets in particle physics as point clouds. Spherical CNNs on full-sky astronomy maps.</li>
+				<li><strong>Medical imaging and AR/VR.</strong> Cortical surfaces, 3D avatars.</li>
+			</ul>
+
+			<h3 class="_secondary-title" id="s9">9. A short history</h3>
+
+			<p>None of this came out of nowhere.</p>
+
+			<ul class="_list">
+				<li><strong>Mathematics and physics.</strong> Galois and Lie formalised groups. Klein used them to organise geometry. Noether linked symmetry to conservation. Weyl introduced gauge ideas. Wigner classified particles by representations.</li>
+				<li><strong>Early neural nets.</strong> Rosenblatt built the perceptron (1958). Minsky and Papert's 1969 book included a group-invariance theorem that showed limits of invariant perceptrons. Fukushima's Neocognitron (1980), inspired by Hubel and Wiesel's work on the visual cortex, had local shared detectors and pooling. LeCun and colleagues trained that kind of architecture with backprop, and the CNN was born. Hochreiter and Schmidhuber introduced the LSTM in 1997.</li>
+				<li><strong>Graph networks.</strong> Sperduti, Goller and K&uuml;chler, and Frasconi, Gori and Sperduti worked on neural nets for structured data in the 1990s. Scarselli, Gori and colleagues introduced "the Graph Neural Network" (2005&ndash;2009), computing node states as fixed points of a contraction. Chemists had similar ideas independently. The modern wave came with spectral graph CNNs (2014), ChebNet (2016), GCN and MPNN (2017), and GAT (2018).</li>
+				<li><strong>Signal and geometry processing.</strong> Spectral graph theory, graph signal processing, wavelets, scattering networks, discrete Laplacians, and spectral shape analysis all fed directly into geometric CNNs on meshes around 2015&ndash;2017.</li>
+				<li><strong>Equivariance.</strong> Group-equivariant CNNs (2016), steerable CNNs (2017), spherical CNNs (2018), general theory on homogeneous spaces (2018&ndash;2019), gauge-equivariant CNNs (2019), Tensor Field Networks (2018), E(n) GNNs (2021).</li>
+			</ul>
+
+			<p>The phrase "geometric deep learning" itself was popularised in a 2017 paper about deep learning on graphs and manifolds. The 2021 book broadened it into the symmetry-first framework described here.</p>
+
+			<h3 class="_secondary-title" id="s10">10. What I take away from all this</h3>
+
+			<p>If I had to compress this post into one sentence: <strong>ask what shouldn't matter, and let that decide the architecture.</strong></p>
+
+			<ul class="_list">
+				<li>Shifts shouldn't matter &rarr; convolution.</li>
+				<li>Node order shouldn't matter &rarr; message passing.</li>
+				<li>Rotations shouldn't matter &rarr; group or steerable convolution.</li>
+				<li>Choice of local frame shouldn't matter &rarr; gauge equivariance.</li>
+				<li>Sampling speed shouldn't matter &rarr; gates.</li>
+			</ul>
+
+			<p>And on top of symmetry, stability and scale separation push you toward local layers, depth, and pooling.</p>
+
+			<p>I don't think this is the final word. There are open questions I find genuinely interesting. How much data does a symmetry actually save you, in precise terms? How do you handle symmetries that only mostly hold? How should expressivity and generalisation be traded off on graphs? What does this look like for causal or generative models? But as a way of making sense of the zoo, it's the most useful lens I've come across.</p>
+
+			<h4 class="_tertiary-title" id="further-reading">Further reading</h4>
+
+			<ul class="_list">
+				<li>Bronstein, Bruna, Cohen, Veli&#269;kovi&#263;. <em>Geometric Deep Learning: Grids, Groups, Graphs, Geodesics, and Gauges</em>. arXiv:2104.13478, 2021.</li>
+				<li>Cohen &amp; Welling. <em>Group Equivariant Convolutional Networks</em>. ICML 2016.</li>
+				<li>Kipf &amp; Welling. <em>Semi-Supervised Classification with Graph Convolutional Networks</em>. ICLR 2017.</li>
+				<li>Gilmer et al. <em>Neural Message Passing for Quantum Chemistry</em>. ICML 2017.</li>
+				<li>Veli&#269;kovi&#263; et al. <em>Graph Attention Networks</em>. ICLR 2018.</li>
+				<li>Zaheer et al. <em>Deep Sets</em>. NeurIPS 2017.</li>
+				<li>Xu et al. <em>How Powerful are Graph Neural Networks?</em> ICLR 2019.</li>
+				<li>Satorras, Hoogeboom, Welling. <em>E(n) Equivariant Graph Neural Networks</em>. ICML 2021.</li>
+				<li>Cohen et al. <em>Gauge Equivariant Convolutional Networks and the Icosahedral CNN</em>. ICML 2019.</li>
+				<li>Tallec &amp; Ollivier. <em>Can Recurrent Neural Networks Warp Time?</em> ICLR 2018.</li>
+				<li>Mallat. <em>Group Invariant Scattering</em>. Comm. Pure Appl. Math., 2012.</li>
+			</ul>
+
+			<nav class="_bottom-navigation" aria-label="bottom-navigation">
+				<ul>
+					<li><a href="../../index.html">Home</a></li>
+					<span aria-hidden="true">-</span>
+					<li><a href="./posts.html">Posts</a></li>
+				</ul>
+			</nav>
+		</section>
+
+		<div id="notice">
+			Repository: <a href="https://github.com/abhinaash-broski/Portfolio" target="_blank">https://github.com/abhinaash-broski/Portfolio</a>
+		</div>
+	</main>
+
+	<footer>
+		<p class="__footer-copyright">&copy; Copyrights, Abhinaash Tiwari</p>
+	</footer>
+</body>
+</html>

@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="author" content="Abhinaash Tiwari">
+	<meta name="description" content="Why the convolution integral looks the way it does: flip, shift, multiply, integrate. A walk from the definition through smoothing, impulse responses, the convolution theorem, Green's functions, pattern matching, and the translation-invariance theorem that explains why convolution is everywhere.">
+	<meta name="keywords" content="convolution, convolution theorem, Fourier transform, impulse response, LTI systems, Green's function, heat kernel, Gaussian smoothing, cross-correlation, convolutional neural networks, translation invariance">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Convolution, from the Integral Up | Abhinaash Blog</title>
+
+	<link rel="icon" type="image/x-icon" href="#">
+	<link rel="stylesheet" type="text/css" href="../styles/style.css">
+	<link rel="stylesheet" type="text/css" href="../styles/post.css">
+
+	<script>
+		window.MathJax = {
+			tex: {
+				inlineMath: [['$', '$']],
+				displayMath: [['$$', '$$']]
+			}
+		};
+	</script>
+	<script defer id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+</head>
+<body>
+	<header class="container__">
+		<h1 class="__header-title"><a href="../../index.html">Abhinaash Blog</a></h1>
+		<nav class="__header-nav">
+			<ul>
+				<li><a href="../../index.html">Home</a></li>
+				<li><a href="./about.html">About</a></li>
+				<li><a class="current-page__" href="./posts.html">Posts</a></li>
+				<li><a href="./resume.html">Resume</a></li>
+			</ul>
+		</nav>
+	</header>
+
+	<main class="container__">
+		<section class="__post">
+			<img class="_thumbnail" src="https://picsum.photos/seed/convolution/800/400?grayscale" width="800" height="400" alt="Article thumbnail.">
+			<div class="_title-date">
+				<h2>Convolution: The Mathematics Behind Sliding, Smoothing, and Pattern Matching</h2>
+				<time datetime="2026-09-15"><i>September 15, 2026</i></time>
+			</div>
+
+			<p class="_byline"><em>Why one function is reflected, why the other is shifted, and why the product is integrated &mdash; and how that single structure turns into smoothing, impulse responses, Green's functions and edge detectors.</em></p>
+
+			<p>Convolution appears almost everywhere in applied mathematics. It smooths noisy signals. It describes how physical systems respond to external inputs. It appears naturally in differential equations and Fourier analysis. In image processing it produces blurring, sharpening and edge detection. In machine learning, convolutional networks use a closely related operation to detect local patterns such as edges, textures and shapes.</p>
+
+			<p>Yet the definition</p>
+
+			<div class="_math-block">$$
+(f*g)(x) = \int_{-\infty}^{\infty} f(t)\,g(x-t)\,dt
+$$</div>
+
+			<p>does not immediately reveal any of these ideas. Why is one function evaluated at $t$, while the other appears as $g(x-t)$? Why do we integrate their product? And why should this strange-looking operation be related to smoothing, pattern recognition, Fourier transforms and differential equations?</p>
+
+			<p>The key is to stop reading convolution as a formula and start reading it as a rule:</p>
+
+			<p><strong>Convolution measures how information distributed across one function should influence another location, according to a translation-invariant weighting rule.</strong></p>
+
+			<p>That single sentence connects nearly all of its seemingly different interpretations. The rest of this post is an unpacking of it.</p>
+
+			<div class="_toc">
+				<p>Contents</p>
+				<ol>
+					<li><a href="#s1">Starting from the definition</a></li>
+					<li><a href="#s2">Convolution as a weighted sum</a></li>
+					<li><a href="#s3">Why convolution smooths functions</a></li>
+					<li><a href="#s4">A simple discrete example</a></li>
+					<li><a href="#s5">Convolution as a sum of shifted copies</a></li>
+					<li><a href="#s6">Convolution and linear systems</a></li>
+					<li><a href="#s7">Fundamental algebraic properties</a></li>
+					<li><a href="#s8">The Fourier transform changes everything</a></li>
+					<li><a href="#s9">Why smoothing makes sense in Fourier space</a></li>
+					<li><a href="#s10">From convolution to differential equations</a></li>
+					<li><a href="#s11">Convolution as pattern matching</a></li>
+					<li><a href="#s12">A subtle point about CNNs</a></li>
+					<li><a href="#s13">The deeper unifying picture</a></li>
+					<li><a href="#s14">Why convolution appears everywhere</a></li>
+					<li><a href="#conclusion">Conclusion</a></li>
+					<li><a href="#further-reading">Further reading</a></li>
+				</ol>
+			</div>
+
+			<h3 class="_secondary-title" id="s1">1. Starting from the definition</h3>
+
+			<p>For suitable functions $f, g : \mathbb{R} \to \mathbb{R}$, their convolution is</p>
+
+			<div class="_math-block">$$
+\boxed{\;(f*g)(x) = \int_{-\infty}^{\infty} f(t)\,g(x-t)\,dt\;}
+$$</div>
+
+			<p>The result is another function. For every particular value of $x$ we compute one number, $(f*g)(x)$. The variable $t$ disappears after integration; it is only a dummy variable, like the index $i$ in a summation.</p>
+
+			<p>So $(f*g)(x)$ asks: <em>how strongly do $f$ and a shifted version of $g$ interact when the output is evaluated at $x$?</em></p>
+
+			<p>The geometric interpretation comes from rewriting</p>
+
+			<div class="_math-block">$$
+g(x-t) = g\big({-}(t-x)\big).
+$$</div>
+
+			<p>Read as a function of $t$, this first reflects $g$ about the origin, $g(t) \mapsto g(-t)$, and then shifts the reflected function by $x$. That gives the familiar four-step recipe:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\text{flip} \rightarrow \text{shift} \rightarrow \text{multiply} \rightarrow \text{integrate}\;}
+$$</div>
+
+			<p>The graphical procedure is therefore not an arbitrary trick taught for computation. It is already encoded in the expression $g(x-t)$: the value $(f*g)(x)$ is the accumulated overlap between $f$ and a reflected, shifted copy of $g$.</p>
+
+			<div class="_note">
+				<span class="_note-label">On existence</span>
+				<p>The integral need not converge for arbitrary $f$ and $g$. A convenient sufficient condition is $f, g \in L^1(\mathbb{R})$: then $(f*g)(x)$ exists for almost every $x$, the result is again in $L^1$, and Young's inequality gives $\|f*g\|_1 \le \|f\|_1\|g\|_1$. Everything below assumes we are in a setting where the manipulations are licensed.</p>
+			</div>
+
+			<h3 class="_secondary-title" id="s2">2. Convolution as a weighted sum</h3>
+
+			<p>There is a second reading that is often more useful than the flip-and-slide picture. Fix $x$ and look at the integrand:</p>
+
+			<div class="_math-block">$$
+(f*g)(x) = \int_{-\infty}^{\infty} \underbrace{f(t)}_{\text{information at } t}\; \underbrace{g(x-t)}_{\text{weight given to it}}\,dt.
+$$</div>
+
+			<p>For fixed $x$, the quantity $g(x-t)$ is simply a weight assigned to the value $f(t)$. Convolution is a weighted aggregation of $f$, and the kernel $g$ decides which locations matter.</p>
+
+			<p>Suppose $g$ is large when $t$ is close to $x$ and negligible when $t$ is far away. Then $(f*g)(x)$ depends almost entirely on values of $f$ near $x$, and convolution performs <strong>localised information aggregation</strong>. This is the viewpoint that carries over most directly to image filters and to convolutional networks.</p>
+
+			<p>Notice also what the weighting rule does <em>not</em> depend on: absolute position. The weight relating output location $x$ to input location $t$ is a function of the offset $x-t$ alone. The same rule is applied at every point. Section 14 shows that this property essentially characterises convolution.</p>
+
+			<h3 class="_secondary-title" id="s3">3. Why convolution smooths functions</h3>
+
+			<p>Take a Gaussian kernel with standard deviation $\sigma$,</p>
+
+			<div class="_math-block">$$
+G_\sigma(t) = \frac{1}{\sqrt{2\pi}\,\sigma}\, e^{-t^2/(2\sigma^2)}, \qquad \int_{-\infty}^{\infty} G_\sigma(t)\,dt = 1,
+$$</div>
+
+			<p>and define $h = f * G_\sigma$, that is</p>
+
+			<div class="_math-block">$$
+h(x) = \int_{-\infty}^{\infty} f(t)\, \frac{1}{\sqrt{2\pi}\,\sigma}\, e^{-\frac{(x-t)^2}{2\sigma^2}}\,dt.
+$$</div>
+
+			<p>Values $f(t)$ with $t \approx x$ receive large weights, because the exponential is largest there; values far from $x$ receive exponentially smaller weights. Because the kernel is non-negative and integrates to $1$, $h(x)$ is a genuine <em>weighted average</em> of $f$ near $x$ &mdash; in particular, constants are left unchanged.</p>
+
+			<p>Now suppose $f$ is a clean signal plus rapid noise. Neighbouring fluctuations of opposite sign are averaged against one another and partially cancel, while the slowly varying part survives almost untouched. The output is smoother. This is exactly the mechanism behind kernel smoothing in statistics and low-pass filtering in signal processing.</p>
+
+			<p>The regularising effect is not merely heuristic. Whenever the derivatives exist in a suitable sense, differentiation can be moved onto either factor:</p>
+
+			<div class="_math-block">$$
+(f*g)' = f' * g = f * g'.
+$$</div>
+
+			<p>The second equality is the useful one: to differentiate $f*g$ we may differentiate the <em>kernel</em> instead of $f$. So if $g$ is infinitely differentiable with compact support and $f$ is merely integrable, $f*g$ inherits the smoothness of $g$ and is itself infinitely differentiable. Convolving a rough function with a smooth kernel produces a smooth function, and this is one reason convolution is a basic tool in analysis and in partial differential equations.</p>
+
+			<h3 class="_secondary-title" id="s4">4. A simple discrete example</h3>
+
+			<p>Computers deal with sampled rather than continuous signals, and there the integral becomes a sum:</p>
+
+			<div class="_math-block">$$
+\boxed{\;(f*g)[n] = \sum_{k=-\infty}^{\infty} f[k]\, g[n-k]\;}
+$$</div>
+
+			<p>with values outside the stored sequence treated as zero. Take</p>
+
+			<div class="_math-block">$$
+f = [1,2,3,4], \qquad g = [1,1],
+$$</div>
+
+			<p>indexed from $0$. Working through the sum term by term:</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+(f*g)[0] &= f[0]g[0] = 1,\\
+(f*g)[1] &= f[0]g[1] + f[1]g[0] = 1 + 2 = 3,\\
+(f*g)[2] &= f[1]g[1] + f[2]g[0] = 2 + 3 = 5,\\
+(f*g)[3] &= f[2]g[1] + f[3]g[0] = 3 + 4 = 7,\\
+(f*g)[4] &= f[3]g[1] = 4.
+\end{aligned}
+$$</div>
+
+			<p>Therefore</p>
+
+			<div class="_math-block">$$
+\boxed{\;[1,2,3,4] * [1,1] = [1,3,5,7,4]\;}
+$$</div>
+
+			<p>The output has length $4 + 2 - 1 = 5$: convolution with a kernel of length $m$ extends a signal of length $n$ to length $n+m-1$. Away from the two boundary entries, the kernel $[1,1]$ is just adding neighbouring values. If instead we use</p>
+
+			<div class="_math-block">$$
+g = \left[\tfrac{1}{2}, \tfrac{1}{2}\right],
+$$</div>
+
+			<p>the same operation computes local averages &mdash; a moving-average filter, and the discrete counterpart of the Gaussian smoothing above. The weights summing to $1$ play the same role here as $\int G_\sigma = 1$ did there.</p>
+
+			<h3 class="_secondary-title" id="s5">5. Convolution as a sum of shifted copies</h3>
+
+			<p>A third interpretation follows from linearity, and it is probably the most useful mental model of all.</p>
+
+			<p>Suppose the input is a train of impulses,</p>
+
+			<div class="_math-block">$$
+f = \sum_k a_k\, \delta(\,\cdot - t_k),
+$$</div>
+
+			<p>understood in the distributional sense. Convolving with $g$ and using linearity,</p>
+
+			<div class="_math-block">$$
+f * g = \sum_k a_k \big( \delta(\,\cdot - t_k) * g \big),
+$$</div>
+
+			<p>and the defining property of the Dirac delta is that convolution with a shifted delta is a shift,</p>
+
+			<div class="_math-block">$$
+\delta(\,\cdot - t_k) * g = g(\,\cdot - t_k).
+$$</div>
+
+			<p>Hence</p>
+
+			<div class="_math-block">$$
+\boxed{\;(f*g)(t) = \sum_k a_k\, g(t - t_k)\;}
+$$</div>
+
+			<p>The output is a superposition of shifted, scaled copies of the kernel. In words:</p>
+
+			<p><strong>Every point of the input launches its own translated copy of the kernel, scaled by the input's value at that point, and convolution adds all of those copies together.</strong></p>
+
+			<p>This one picture explains smoothing, physical response systems, sums of independent random variables, and Green's functions using the same mathematics. It is also the picture that makes the next section almost inevitable.</p>
+
+			<h3 class="_secondary-title" id="s6">6. Convolution and linear systems</h3>
+
+			<p>Consider a system that accepts an input signal and returns an output. Feed it the simplest possible input, an impulse concentrated at the origin,</p>
+
+			<div class="_math-block">$$
+\delta(t) \;\longmapsto\; h(t).
+$$</div>
+
+			<p>The resulting output $h$ is called the system's <strong>impulse response</strong>. Suppose the system has two properties:</p>
+
+			<ul class="_list">
+				<li><strong>Linearity</strong>: the response to a sum of inputs is the sum of the responses.</li>
+				<li><strong>Time invariance</strong>: delaying the input only delays the output, so $\delta(t-\tau)$ produces $h(t-\tau)$.</li>
+			</ul>
+
+			<p>Any signal can be written as a continuous superposition of impulses &mdash; this is the sifting property of the delta,</p>
+
+			<div class="_math-block">$$
+f(t) = \int_{-\infty}^{\infty} f(\tau)\, \delta(t-\tau)\,d\tau.
+$$</div>
+
+			<p>Linearity lets us respond to each impulse separately, and time invariance tells us what each response is. Summing them,</p>
+
+			<div class="_math-block">$$
+y(t) = \int_{-\infty}^{\infty} f(\tau)\, h(t-\tau)\,d\tau,
+$$</div>
+
+			<p>which is precisely</p>
+
+			<div class="_math-block">$$
+\boxed{\;y = f * h\;}
+$$</div>
+
+			<p>So for a linear time-invariant system,</p>
+
+			<div class="_math-block">$$
+\boxed{\;\text{output} = \text{input} * \text{impulse response}\;}
+$$</div>
+
+			<p>The system is <em>completely characterised</em> by its response to a single impulse. This is one of the deepest reasons convolution appears so relentlessly in engineering and mathematical physics: it is not that convolution happens to be useful for linear systems, it is that linearity plus time invariance leaves no other possibility.</p>
+
+			<h3 class="_secondary-title" id="s7">7. Fundamental algebraic properties</h3>
+
+			<p>Convolution behaves remarkably like multiplication.</p>
+
+			<h4 class="_tertiary-title">Commutativity</h4>
+
+			<div class="_math-block">$$
+\boxed{\;f * g = g * f\;}
+$$</div>
+
+			<p>Substitute $u = x - t$, so that $t = x - u$ and $dt = -du$. As $t$ runs from $-\infty$ to $\infty$, $u$ runs from $\infty$ to $-\infty$; the sign from $dt$ cancels against the reversed limits, giving</p>
+
+			<div class="_math-block">$$
+(f*g)(x) = \int_{-\infty}^{\infty} f(t)g(x-t)\,dt = \int_{-\infty}^{\infty} g(u) f(x-u)\,du = (g*f)(x).
+$$</div>
+
+			<p>This is worth pausing on. The flip-and-slide picture treats $f$ and $g$ asymmetrically &mdash; one stays put, the other is reflected and dragged across it &mdash; but the result does not care which one you chose to move. "Signal" and "kernel" is a distinction we impose, not one the operation makes.</p>
+
+			<h4 class="_tertiary-title">Associativity, distributivity, scalars</h4>
+
+			<div class="_math-block">$$
+\boxed{\;(f*g)*h = f*(g*h)\;} \qquad \boxed{\;f*(g+h) = f*g + f*h\;} \qquad \boxed{\;(cf)*g = c(f*g)\;}
+$$</div>
+
+			<p>Associativity has a concrete meaning: applying two filters in succession is the same as applying a single combined filter $g * h$, which is why cascaded blurs can be precomputed into one kernel.</p>
+
+			<h4 class="_tertiary-title">The missing identity</h4>
+
+			<p>One property of multiplication fails in an interesting way. There is no function $e \in L^1(\mathbb{R})$ with $e * f = f$ for all $f$. The identity element is the Dirac delta,</p>
+
+			<div class="_math-block">$$
+\delta * f = f,
+$$</div>
+
+			<p>and $\delta$ is a distribution, not a function. This is not a technicality to be waved away &mdash; it is the reason approximate identities exist: kernels like $G_\sigma$ with $\sigma \to 0$ approach $\delta$ and recover $f$ in the limit, which is how smoothing is undone as the kernel narrows. It is also exactly what makes Section 10 work.</p>
+
+			<h3 class="_secondary-title" id="s8">8. The Fourier transform changes everything</h3>
+
+			<p>The resemblance to multiplication becomes an identity once we pass to the frequency domain.</p>
+
+			<div class="_note">
+				<span class="_note-label">Convention</span>
+				<p>Throughout we use $\displaystyle\widehat{f}(\omega) = \int_{-\infty}^{\infty} f(t)e^{-i\omega t}\,dt$. The convolution theorem below is clean <em>only</em> in this convention. With the unitary convention $\frac{1}{\sqrt{2\pi}}\int f(t)e^{-i\omega t}dt$ the same computation produces $\widehat{f*g} = \sqrt{2\pi}\,\widehat{f}\,\widehat{g}$, and with the $e^{-2\pi i \xi t}$ convention the constant disappears again. The stray factors are bookkeeping, not mathematics, but they have to be tracked.</p>
+			</div>
+
+			<p>The <strong>convolution theorem</strong> states that</p>
+
+			<div class="_math-block">$$
+\boxed{\;\mathcal{F}\{f*g\} = \widehat{f}\,\widehat{g}\;}
+$$</div>
+
+			<p>Convolution in physical space becomes ordinary pointwise multiplication in frequency space. Here is why. Start with the definition and transform:</p>
+
+			<div class="_math-block">$$
+\mathcal{F}\{f*g\}(\omega) = \int_{-\infty}^{\infty} (f*g)(x)\, e^{-i\omega x}\,dx = \int_{-\infty}^{\infty}\!\!\int_{-\infty}^{\infty} f(t)\,g(x-t)\, e^{-i\omega x}\,dt\,dx.
+$$</div>
+
+			<p>For $f, g \in L^1$ the double integral is absolutely convergent, so Fubini's theorem permits exchanging the order:</p>
+
+			<div class="_math-block">$$
+= \int_{-\infty}^{\infty} f(t) \left[ \int_{-\infty}^{\infty} g(x-t)\, e^{-i\omega x}\,dx \right] dt.
+$$</div>
+
+			<p>In the inner integral substitute $u = x - t$, so $x = u + t$ and $dx = du$:</p>
+
+			<div class="_math-block">$$
+\int_{-\infty}^{\infty} g(u)\, e^{-i\omega(u+t)}\,du = e^{-i\omega t} \int_{-\infty}^{\infty} g(u)\, e^{-i\omega u}\,du = e^{-i\omega t}\, \widehat{g}(\omega).
+$$</div>
+
+			<p>The factor $\widehat{g}(\omega)$ no longer depends on $t$, so it comes out of the outer integral:</p>
+
+			<div class="_math-block">$$
+\mathcal{F}\{f*g\}(\omega) = \widehat{g}(\omega) \int_{-\infty}^{\infty} f(t)\, e^{-i\omega t}\,dt = \widehat{f}(\omega)\,\widehat{g}(\omega).
+$$</div>
+
+			<p>The entire proof is one substitution and one application of Fubini. The reason it works is visible in the middle step: shifting $g$ by $t$ multiplies its transform by $e^{-i\omega t}$, and convolution is built out of exactly those shifts. Complex exponentials turn translation into multiplication, and convolution is nothing but a weighted sum of translations.</p>
+
+			<h3 class="_secondary-title" id="s9">9. Why smoothing makes sense in Fourier space</h3>
+
+			<p>The convolution theorem gives a second, independent explanation of smoothing. If $h = f * g$, then</p>
+
+			<div class="_math-block">$$
+\widehat{h}(\omega) = \widehat{f}(\omega)\, \widehat{g}(\omega).
+$$</div>
+
+			<p>A smoothing kernel is one whose transform is close to $1$ at low frequencies and close to $0$ at high frequencies. The Gaussian is the model case: with the convention above,</p>
+
+			<div class="_math-block">$$
+\widehat{G_\sigma}(\omega) = e^{-\sigma^2\omega^2/2},
+$$</div>
+
+			<p>which is again a Gaussian, but an <em>inverted</em> one &mdash; wide in space means narrow in frequency. Since $\widehat{G_\sigma}(\omega) \approx 0$ for large $|\omega|$, the product $\widehat{f}\widehat{g}$ suppresses precisely the high-frequency content of $f$, and a wider kernel (larger $\sigma$) suppresses more of it. Rapid fluctuations are high-frequency components, so the output is smoother.</p>
+
+			<p>The two explanations are the same statement in different coordinates:</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead>
+						<tr><th>Viewpoint</th><th>What convolution is</th></tr>
+					</thead>
+					<tbody>
+						<tr><td>Spatial</td><td>Local weighted averaging</td></tr>
+						<tr><td>Frequency</td><td>Frequency-dependent rescaling</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p>Neither is more fundamental. The Fourier transform is simply the change of basis in which the operation becomes diagonal.</p>
+
+			<h3 class="_secondary-title" id="s10">10. From convolution to differential equations</h3>
+
+			<p>The same structure explains why convolution is entangled with differential equations. Consider</p>
+
+			<div class="_math-block">$$
+Lu = f,
+$$</div>
+
+			<p>where $L$ is a linear differential operator <em>with constant coefficients</em>. Suppose we can find a $G$ satisfying</p>
+
+			<div class="_math-block">$$
+LG = \delta.
+$$</div>
+
+			<p>Such a $G$ is called a <strong>fundamental solution</strong>, or a Green's function. Now set $u = G * f$. Because $L$ has constant coefficients it commutes with translations, and therefore with convolution, so derivatives may be moved onto either factor:</p>
+
+			<div class="_math-block">$$
+Lu = L(G*f) = (LG)*f = \delta * f = f.
+$$</div>
+
+			<p>The last step is the identity property from Section 7. Hence</p>
+
+			<div class="_math-block">$$
+\boxed{\;u = G * f \;\text{ solves }\; Lu = f.\;}
+$$</div>
+
+			<div class="_note">
+				<span class="_note-label">Where constant coefficients matter</span>
+				<p>The step $L(G*f) = (LG)*f$ is exactly where translation invariance is used, and it is false in general for variable-coefficient operators: if the coefficients depend on position, $L$ does not commute with shifts and the solution operator is an integral operator with a two-variable kernel $G(x,y)$ rather than a convolution with $G(x-y)$. Convolution is the special case in which the Green's function depends only on the offset.</p>
+			</div>
+
+			<p>Heat flow is the standard example. For $u_t = u_{xx}$ on the real line with initial data $u_0$, the solution is</p>
+
+			<div class="_math-block">$$
+u(x,t) = \int_{-\infty}^{\infty} \Phi(x-y,\,t)\, u_0(y)\,dy = (\Phi(\cdot,t) * u_0)(x), \qquad \Phi(x,t) = \frac{1}{\sqrt{4\pi t}}\, e^{-x^2/(4t)}.
+$$</div>
+
+			<p>Compare $\Phi$ with the Gaussian of Section 3: they match exactly when $\sigma = \sqrt{2t}$. Diffusion <em>is</em> Gaussian smoothing, with a kernel that widens as $\sqrt{t}$. The physical statement that heat spreads into neighbouring points and the analytic statement that convolution averages locally are the same statement, and the increasing width of the kernel is why detail is irreversibly lost as time runs forward.</p>
+
+			<h3 class="_secondary-title" id="s11">11. Convolution as pattern matching</h3>
+
+			<p>Now take a discrete local patch and a filter of the same size,</p>
+
+			<div class="_math-block">$$
+x = [x_1, \ldots, x_n], \qquad w = [w_1, \ldots, w_n].
+$$</div>
+
+			<p>A local filtering operation computes</p>
+
+			<div class="_math-block">$$
+y = \sum_{i=1}^{n} w_i x_i, \qquad\text{that is}\qquad \boxed{\;y = w^\top x\;}
+$$</div>
+
+			<p>the inner product of the filter with the local data. Writing it geometrically,</p>
+
+			<div class="_math-block">$$
+w^\top x = \|w\|\,\|x\|\cos\theta,
+$$</div>
+
+			<p>the response is largest when $x$ points in the same direction as $w$. A filter therefore behaves like a local template matcher: if $w$ encodes a vertical edge, patches whose intensity pattern resembles a vertical edge produce a strong response. Slide the same filter across the image and the resulting map says <em>where</em> that pattern occurs. Weight sharing is what makes the answer meaningful &mdash; the same template is tested everywhere.</p>
+
+			<div class="_note">
+				<span class="_note-label">A caveat worth keeping</span>
+				<p>The factor $\|x\|$ matters. A bright, high-contrast patch can produce a large response without resembling the template at all, simply because its norm is large. Raw inner products measure alignment only when magnitudes are controlled, which is part of why normalisation appears both in classical template matching (normalised cross-correlation) and in modern networks (batch and layer normalisation).</p>
+			</div>
+
+			<h3 class="_secondary-title" id="s12">12. A subtle point about CNNs</h3>
+
+			<p>There is a mathematical detail worth stating plainly. True discrete convolution reverses the kernel,</p>
+
+			<div class="_math-block">$$
+(f*g)[n] = \sum_k f[k]\, g[n-k],
+$$</div>
+
+			<p>whereas the operation implemented by most deep-learning libraries is</p>
+
+			<div class="_math-block">$$
+y[n] = \sum_k f[n+k]\, g[k],
+$$</div>
+
+			<p>with no reversal. The second is <strong>cross-correlation</strong>. The two are related by reflecting the kernel: writing $\tilde{g}(t) = g(-t)$,</p>
+
+			<div class="_math-block">$$
+\operatorname{corr}(f,g) = f * \tilde{g},
+$$</div>
+
+			<p>so they carry the same information and differ only by which orientation of the kernel you call the kernel.</p>
+
+			<p>Does the distinction matter? Mathematically, yes: cross-correlation is not commutative and not associative, so the algebra of Section 7 does not transfer to it unchanged. Practically, for a network it does not: the filter weights are learned, so a network that would benefit from the reflected kernel simply learns the reflected weights. The two formulations describe the same family of functions. Calling the layer "convolution" is entrenched terminology rather than an error, but it is worth knowing which operation the code actually performs &mdash; it matters as soon as you hand-design a kernel, or compare against a signal-processing reference.</p>
+
+			<h3 class="_secondary-title" id="s13">13. The deeper unifying picture</h3>
+
+			<p>We can now put the readings side by side. Let $h = f * g$.</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead>
+						<tr><th>Perspective</th><th>What $f * g$ means</th></tr>
+					</thead>
+					<tbody>
+						<tr><td>Geometric</td><td>Overlap of $f$ with reflected, shifted copies of $g$</td></tr>
+						<tr><td>Weighted average</td><td>Aggregation of $f$ under the weighting rule $g$</td></tr>
+						<tr><td>Superposition</td><td>Every point of $f$ emits a scaled copy of $g$; add them up</td></tr>
+						<tr><td>Fourier</td><td>$\widehat{h} = \widehat{f}\,\widehat{g}$ &mdash; multiplication, in the right basis</td></tr>
+						<tr><td>Systems</td><td>Output of an LTI system with impulse response $g$</td></tr>
+						<tr><td>PDE</td><td>$u = G * f$ solves $Lu = f$ via a fundamental solution</td></tr>
+						<tr><td>Vision and learning</td><td>A sliding weighted template, matched everywhere</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p>These are not seven tricks that happen to share a symbol. They are seven descriptions of one structure.</p>
+
+			<h3 class="_secondary-title" id="s14">14. Why convolution appears everywhere</h3>
+
+			<p>There is a final reason for the ubiquity, and it is the sharpest one: <strong>translation symmetry</strong>.</p>
+
+			<p>Suppose an operator $T$ acting on functions has two properties:</p>
+
+			<ol class="_list">
+				<li>it is linear;</li>
+				<li>shifting the input merely shifts the output, $\;T[f(\cdot - a)](x) = (Tf)(x-a)$ for every $a$.</li>
+			</ol>
+
+			<p>The second property says $T$ does not care about absolute location: it applies the same rule everywhere. Under suitable continuity assumptions, every such operator is a convolution,</p>
+
+			<div class="_math-block">$$
+\boxed{\;Tf = k * f\;}
+$$</div>
+
+			<p>for some kernel $k$. This is the real explanation, and it is stronger than any individual application: convolution is not <em>a</em> way to build translation-invariant linear operators, it is the <em>only</em> way.</p>
+
+			<div class="_note">
+				<span class="_note-label">What the kernel can be</span>
+				<p>The kernel need not be a function. The identity operator corresponds to $k = \delta$ and differentiation to $k = \delta'$, both distributions. The precise statement &mdash; every continuous linear translation-invariant operator from Schwartz functions to tempered distributions is convolution with a tempered distribution &mdash; is a consequence of the Schwartz kernel theorem.</p>
+			</div>
+
+			<p>This is also the point where this post meets the previous one. In <a href="./geometric-deep-learning.html">Geometric Deep Learning</a>, the same theorem appears in its discrete, finite form: a linear map on a cyclic grid commutes with the shift operator if and only if it is a convolution, which is why convolutional networks are <em>forced</em> by the demand for shift equivariance rather than chosen for convenience. Continuous or discrete, the content is identical. Ask for linearity and translation invariance, and convolution is what you get.</p>
+
+			<p>So whenever a system is linear and treats every location by the same rule &mdash; a lens, a filter, a homogeneous medium, a layer of a network &mdash; convolution is already there, whether or not anyone wrote the integral down.</p>
+
+			<h3 class="_secondary-title" id="conclusion">Conclusion</h3>
+
+			<p>At first sight</p>
+
+			<div class="_math-block">$$
+(f*g)(x) = \int_{-\infty}^{\infty} f(t)\, g(x-t)\,dt
+$$</div>
+
+			<p>looks like a needlessly complicated integral. But every piece is doing a job. The $x - t$ supplies translation. The multiplication assigns influence. The integral aggregates every contribution. Together:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\text{convolution} = \text{shifted interaction} + \text{weighted aggregation}\;}
+$$</div>
+
+			<p>That single structure is why one operation can smooth a signal, model the response of a physical system, construct solutions of differential equations, detect patterns in images, and turn into multiplication under a Fourier transform. Perhaps the most revealing identity is therefore</p>
+
+			<div class="_math-block">$$
+\boxed{\;\mathcal{F}(f*g) = \mathcal{F}(f)\,\mathcal{F}(g)\;}
+$$</div>
+
+			<p>because it shows that convolution is not an awkward alternative to multiplication. In the right representation, convolution <em>is</em> multiplication. And that is how an operation which first appears as a peculiar integral ended up as one of the organising ideas of modern applied mathematics.</p>
+
+			<h4 class="_tertiary-title" id="further-reading">Further reading</h4>
+
+			<ul class="_list">
+				<li>Stein &amp; Shakarchi. <em>Fourier Analysis: An Introduction</em>. Princeton Lectures in Analysis I, 2003. &mdash; convolution, approximate identities, the convolution theorem.</li>
+				<li>Katznelson. <em>An Introduction to Harmonic Analysis</em>. &mdash; convolution as the multiplication of a Banach algebra.</li>
+				<li>Bracewell. <em>The Fourier Transform and Its Applications</em>. &mdash; the graphical flip-and-slide picture, worked at length.</li>
+				<li>Oppenheim &amp; Willsky. <em>Signals and Systems</em>. &mdash; impulse responses and LTI systems.</li>
+				<li>Evans. <em>Partial Differential Equations</em>. AMS Graduate Studies in Mathematics 19. &mdash; fundamental solutions and the heat kernel.</li>
+				<li>Rudin. <em>Functional Analysis</em>. &mdash; distributions, tempered distributions, and translation-invariant operators.</li>
+				<li>Goodfellow, Bengio, Courville. <em>Deep Learning</em>. MIT Press, 2016, Chapter 9. &mdash; the convolution versus cross-correlation convention in neural networks.</li>
+			</ul>
+
+			<nav class="_bottom-navigation" aria-label="bottom-navigation">
+				<ul>
+					<li><a href="../../index.html">Home</a></li>
+					<span aria-hidden="true">-</span>
+					<li><a href="./posts.html">Posts</a></li>
+				</ul>
+			</nav>
+		</section>
+
+		<div id="notice">
+			Repository: <a href="https://github.com/abhinaash-broski/Portfolio" target="_blank">https://github.com/abhinaash-broski/Portfolio</a>
+		</div>
+	</main>
+
+	<footer>
+		<p class="__footer-copyright">&copy; Copyrights, Abhinaash Tiwari</p>
+	</footer>
+</body>
+</html>

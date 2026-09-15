@@ -14,6 +14,20 @@
 	align-items: center;
 }
 
+.article-read-more_ {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	text-decoration: none;
+	border-block-end: var(--border-shorthand);
+}
+
+.article-date_ {
+	font-size: var(--font-size-secondary);
+	color: rgba(43, 41, 37, 0.6);
+}
+
 /* Featured Section / Featured Article */
 
 .__article-featured-section {

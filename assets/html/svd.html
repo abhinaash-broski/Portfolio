@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="author" content="Abhinaash Tiwari">
+	<meta name="description" content="Singular Value Decomposition explained from the geometry up: why every matrix factors as U Sigma V transpose, what the singular values measure, and how one decomposition answers questions about rank, subspaces, low-rank approximation, pseudoinverses, conditioning and PCA.">
+	<meta name="keywords" content="singular value decomposition, SVD, linear algebra, low-rank approximation, Eckart-Young-Mirsky, pseudoinverse, Moore-Penrose, condition number, principal component analysis, PCA, numerical rank, image compression">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Singular Value Decomposition | Abhinaash Blog</title>
+
+	<link rel="icon" type="image/x-icon" href="#">
+	<link rel="stylesheet" type="text/css" href="../styles/style.css">
+	<link rel="stylesheet" type="text/css" href="../styles/post.css">
+
+	<script>
+		window.MathJax = {
+			tex: {
+				inlineMath: [['$', '$']],
+				displayMath: [['$$', '$$']]
+			}
+		};
+	</script>
+	<script defer id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+</head>
+<body>
+	<header class="container__">
+		<h1 class="__header-title"><a href="../../index.html">Abhinaash Blog</a></h1>
+		<nav class="__header-nav">
+			<ul>
+				<li><a href="../../index.html">Home</a></li>
+				<li><a href="./about.html">About</a></li>
+				<li><a class="current-page__" href="./posts.html">Posts</a></li>
+				<li><a href="./resume.html">Resume</a></li>
+			</ul>
+		</nav>
+	</header>
+
+	<main class="container__">
+		<section class="__post">
+			<img class="_thumbnail" src="https://picsum.photos/seed/svd/800/400?grayscale" width="800" height="400" alt="Article thumbnail.">
+			<div class="_title-date">
+				<h2>Singular Value Decomposition: Finding the Hidden Geometry Inside a Matrix</h2>
+				<time datetime="2026-09-15"><i>September 15, 2026</i></time>
+			</div>
+
+			<p class="_byline"><em>Every matrix is a rotation, a stretch, and another rotation. Once you see that, rank, conditioning, compression, least squares and PCA all turn out to be the same fact viewed from different angles.</em></p>
+
+			<p>A matrix can look like nothing more than a rectangular table of numbers. In applications, however, that table may represent an image, a set of user ratings, physical measurements, word frequencies, a linear transformation, or millions of parameters in a machine-learning model.</p>
+
+			<p>Singular Value Decomposition, usually called <strong>SVD</strong>, reveals the structure hidden inside that table. For every real $m \times n$ matrix $A$ it provides a factorisation</p>
+
+			<div class="_math-block">$$
+\boxed{\;A = U\Sigma V^{T}\;}
+$$</div>
+
+			<p>where $U$ and $V$ are orthogonal and $\Sigma$ holds nonnegative singular values. Unlike eigenvalue decomposition, this works even when $A$ is rectangular, and it works for <em>every</em> matrix without exception.</p>
+
+			<p>The importance of SVD is not that it rewrites one matrix as three. It is that the three factors expose the <strong>geometry, rank, dominant directions, null spaces, conditioning and information content</strong> of a linear transformation &mdash; all at once. That is why the same decomposition turns up in numerical analysis, optimisation, statistics, machine learning, signal processing, image compression, recommender systems and scientific computing.</p>
+
+			<div class="_toc">
+				<p>Contents</p>
+				<ol>
+					<li><a href="#s1">What does SVD actually say?</a></li>
+					<li><a href="#s2">The geometry behind the factorisation</a></li>
+					<li><a href="#s3">The circle-to-ellipse picture</a></li>
+					<li><a href="#s4">Where do the singular values come from?</a></li>
+					<li><a href="#s5">Constructing the left singular vectors</a></li>
+					<li><a href="#s6">Why two sets of singular vectors?</a></li>
+					<li><a href="#s7">SVD reveals the four fundamental subspaces</a></li>
+					<li><a href="#s8">SVD as a sum of rank-one matrices</a></li>
+					<li><a href="#s9">The first singular component</a></li>
+					<li><a href="#s10">The Eckart&ndash;Young&ndash;Mirsky theorem</a></li>
+					<li><a href="#s11">Why image compression works</a></li>
+					<li><a href="#s12">SVD and noise</a></li>
+					<li><a href="#s13">Numerical rank</a></li>
+					<li><a href="#s14">SVD and the Moore&ndash;Penrose pseudoinverse</a></li>
+					<li><a href="#s15">Condition numbers and ill-conditioning</a></li>
+					<li><a href="#s16">SVD versus eigenvalue decomposition</a></li>
+					<li><a href="#s17">SVD and principal component analysis</a></li>
+					<li><a href="#s18">SVD and recommendation systems</a></li>
+					<li><a href="#s19">A small worked example</a></li>
+					<li><a href="#s20">The deeper idea</a></li>
+					<li><a href="#conclusion">Conclusion</a></li>
+					<li><a href="#further-reading">Further reading</a></li>
+				</ol>
+			</div>
+
+			<h3 class="_secondary-title" id="s1">1. What does SVD actually say?</h3>
+
+			<p>Let $A \in \mathbb{R}^{m \times n}$. Then $A = U\Sigma V^{T}$, where</p>
+
+			<div class="_math-block">$$
+U \in \mathbb{R}^{m \times m}, \qquad V \in \mathbb{R}^{n \times n}
+$$</div>
+
+			<p>are orthogonal, meaning $U^{T}U = I_m$ and $V^{T}V = I_n$, and the middle factor $\Sigma \in \mathbb{R}^{m \times n}$ is diagonal in the rectangular sense:</p>
+
+			<div class="_math-block">$$
+\Sigma = \begin{bmatrix} D & 0 \\ 0 & 0 \end{bmatrix}, \qquad D = \operatorname{diag}(\sigma_1, \sigma_2, \ldots, \sigma_r),
+$$</div>
+
+			<p>with</p>
+
+			<div class="_math-block">$$
+\sigma_1 \geq \sigma_2 \geq \cdots \geq \sigma_r &gt; 0, \qquad r = \operatorname{rank}(A).
+$$</div>
+
+			<p>The numbers $\sigma_1, \ldots, \sigma_r$ are the <strong>singular values</strong> of $A$. The zero blocks are whatever shape is needed to make $\Sigma$ an $m \times n$ matrix; if $A$ has full rank one or both of them may be absent.</p>
+
+			<p>The decomposition produces orthonormal bases adapted to the input and output spaces, and in those bases the transformation becomes purely diagonal. So the honest reading of $A = U\Sigma V^T$ is not "three matrices" but three <em>actions</em>:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\text{change coordinates} \rightarrow \text{stretch} \rightarrow \text{change coordinates again}\;}
+$$</div>
+
+			<h3 class="_secondary-title" id="s2">2. The geometry behind the factorisation</h3>
+
+			<p>Suppose a vector $x \in \mathbb{R}^n$ is transformed by $A$, giving $y = Ax$. Using the SVD, $y = U\Sigma V^{T}x$. Read the operations from right to left.</p>
+
+			<p>First,</p>
+
+			<div class="_math-block">$$
+z = V^{T}x.
+$$</div>
+
+			<p>Because $V$ is orthogonal, this changes the coordinate system without changing any lengths or angles. It is a rotation, possibly with a reflection. Nothing is distorted; we are only choosing a better set of axes to describe $x$.</p>
+
+			<p>Then,</p>
+
+			<div class="_math-block">$$
+w = \Sigma z, \qquad\text{that is}\qquad w_i = \sigma_i z_i.
+$$</div>
+
+			<p>This is the only step that does anything interesting. Each coordinate is independently scaled, with no mixing whatsoever. All of the transformation's distortion lives here, in $r$ numbers.</p>
+
+			<p>Finally,</p>
+
+			<div class="_math-block">$$
+y = Uw,
+$$</div>
+
+			<p>another rigid change of coordinates, this time in the output space. Altogether:</p>
+
+			<div class="_math-block">$$
+\boxed{\;x \xrightarrow{\;V^{T}\;} \text{special input coordinates} \xrightarrow{\;\Sigma\;} \text{stretching} \xrightarrow{\;U\;} Ax\;}
+$$</div>
+
+			<p>Tracking a single basis vector through these three steps gives the equation that carries most of the meaning of SVD:</p>
+
+			<div class="_math-block">$$
+\boxed{\;Av_i = \sigma_i u_i\;}
+$$</div>
+
+			<p>The vector $v_i$ is a special direction in the input space. The matrix $A$ sends it to the direction $u_i$ in the output space. Its length changes by exactly the factor $\sigma_i$. No rotation of $v_i$ into some unrelated direction, no shearing &mdash; along these particular directions, $A$ does nothing but scale.</p>
+
+			<h3 class="_secondary-title" id="s3">3. The circle-to-ellipse picture</h3>
+
+			<p>In two dimensions this becomes something you can draw. Consider every vector with $\|x\|_2 = 1$; these form the unit circle. Apply $A$ to all of them. The image is an ellipse.</p>
+
+			<p>The right singular vectors $v_1, v_2$ mark the special directions on the original circle. Their images are</p>
+
+			<div class="_math-block">$$
+Av_1 = \sigma_1 u_1, \qquad Av_2 = \sigma_2 u_2,
+$$</div>
+
+			<p>so the resulting ellipse has principal semiaxes of length $\sigma_1$ and $\sigma_2$, pointing along $u_1$ and $u_2$. Singular values therefore have a completely concrete meaning:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\sigma_i = \text{the amount of stretching in the } i\text{th special direction}\;}
+$$</div>
+
+			<p>(If $A$ is singular, some $\sigma_i$ vanishes and the ellipse degenerates &mdash; in two dimensions, collapsing to a line segment. That is the geometric face of rank deficiency.)</p>
+
+			<p>This explains why $\sigma_1$ is special. It is the largest stretching factor $A$ can produce anywhere:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\sigma_1 = \max_{x \neq 0} \frac{\|Ax\|_2}{\|x\|_2} = \max_{\|x\|_2 = 1} \|Ax\|_2\;}
+$$</div>
+
+			<p>and the maximising vector is $v_1$. The largest singular value is precisely the operator $2$-norm of $A$, which is why $\sigma_1$ shows up whenever someone needs to bound how much a matrix can amplify a vector.</p>
+
+			<h3 class="_secondary-title" id="s4">4. Where do the singular values come from?</h3>
+
+			<p>Why should such a factorisation exist at all? The answer starts with a trick: even when $A$ is rectangular, the matrix</p>
+
+			<div class="_math-block">$$
+A^{T}A \in \mathbb{R}^{n \times n}
+$$</div>
+
+			<p>is square and symmetric. It is also positive semidefinite, because for any $x$,</p>
+
+			<div class="_math-block">$$
+x^{T}A^{T}Ax = (Ax)^{T}(Ax) = \|Ax\|^2 \geq 0.
+$$</div>
+
+			<p>The spectral theorem therefore hands us an orthonormal basis of eigenvectors,</p>
+
+			<div class="_math-block">$$
+A^{T}Av_i = \lambda_i v_i, \qquad \lambda_i \geq 0,
+$$</div>
+
+			<p>and since the eigenvalues cannot be negative we may take square roots:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\sigma_i = \sqrt{\lambda_i}\,}, \qquad\text{equivalently}\qquad \boxed{\;\sigma_i^2 = \lambda_i(A^{T}A)\;}
+$$</div>
+
+			<p>This is one of the fundamental facts about SVD, and it is easy to see why it must hold. Substituting the factorisation,</p>
+
+			<div class="_math-block">$$
+A^{T}A = (U\Sigma V^{T})^{T}(U\Sigma V^{T}) = V\Sigma^{T}U^{T}U\Sigma V^{T} = V(\Sigma^{T}\Sigma)V^{T},
+$$</div>
+
+			<p>which is an eigendecomposition of $A^{T}A$ with eigenvector matrix $V$ and eigenvalues $\sigma_i^2$. The right singular vectors are exactly the eigenvectors of $A^{T}A$, and the singular values are the square roots of its eigenvalues.</p>
+
+			<div class="_note">
+				<span class="_note-label">A word of caution</span>
+				<p>This is the cleanest way to <em>understand</em> where singular values come from, but it is a poor way to <em>compute</em> them. Forming $A^{T}A$ squares the condition number, so small singular values are computed with badly degraded accuracy. Practical algorithms work on $A$ directly, via bidiagonalisation.</p>
+			</div>
+
+			<h3 class="_secondary-title" id="s5">5. Constructing the left singular vectors</h3>
+
+			<p>Once $v_i$ and $\sigma_i$ are known, define, for every nonzero singular value,</p>
+
+			<div class="_math-block">$$
+u_i = \frac{Av_i}{\sigma_i},
+$$</div>
+
+			<p>which immediately rearranges to $Av_i = \sigma_i u_i$. But we need these to form an orthonormal set, and they do. For $i \neq j$,</p>
+
+			<div class="_math-block">$$
+u_i^{T}u_j = \frac{(Av_i)^{T}(Av_j)}{\sigma_i\sigma_j} = \frac{v_i^{T}A^{T}Av_j}{\sigma_i\sigma_j} = \frac{\sigma_j^2}{\sigma_i\sigma_j}\, v_i^{T}v_j = 0,
+$$</div>
+
+			<p>using $A^{T}Av_j = \sigma_j^2 v_j$ in the third step and the orthogonality of the $v_i$ in the last. The same computation with $i = j$ shows they are unit vectors,</p>
+
+			<div class="_math-block">$$
+u_i^{T}u_i = \frac{v_i^{T}A^{T}Av_i}{\sigma_i^2} = \frac{\sigma_i^2\, v_i^{T}v_i}{\sigma_i^2} = 1,
+$$</div>
+
+			<p>so the construction is complete:</p>
+
+			<div class="_math-block">$$
+\boxed{\;u_i^{T}u_j = \delta_{ij}\;}
+$$</div>
+
+			<p>Orthonormality of the left singular vectors is not an extra assumption we impose. It falls out of the orthogonality of the right singular vectors, for free. SVD naturally produces two orthonormal coordinate systems, one on each side.</p>
+
+			<p>When $r &lt; m$, the vectors $u_1, \ldots, u_r$ do not yet fill $\mathbb{R}^m$; the remaining columns of $U$ are obtained by extending them to an orthonormal basis, and Section 7 says what those extra directions mean.</p>
+
+			<h3 class="_secondary-title" id="s6">6. Why two sets of singular vectors?</h3>
+
+			<p>Eigenvalue decomposition looks for vectors satisfying</p>
+
+			<div class="_math-block">$$
+Ax = \lambda x,
+$$</div>
+
+			<p>which asks $A$ to map a direction back onto itself. That demand only makes sense when $A$ maps a space to <em>itself</em>. If</p>
+
+			<div class="_math-block">$$
+A : \mathbb{R}^n \to \mathbb{R}^m, \qquad m \neq n,
+$$</div>
+
+			<p>then $Ax$ and $\lambda x$ live in different spaces and the equation does not even typecheck. Eigenvectors of a rectangular matrix are not a hard problem; they are a meaningless one.</p>
+
+			<p>SVD sidesteps this by allowing a different basis on each side:</p>
+
+			<div class="_math-block">$$
+\boxed{\;Av_i = \sigma_i u_i, \qquad v_i \in \mathbb{R}^n, \quad u_i \in \mathbb{R}^m\;}
+$$</div>
+
+			<p>Instead of asking which directions are preserved, SVD asks which input directions go to which output directions, and by how much. That question always has an answer. This is also why SVD avoids the other failures of eigendecomposition: eigenvectors need not be orthogonal, a matrix may not have enough of them to form a basis, and the eigenvalues may be complex even for a real matrix. Singular values are real, nonnegative, and always exist.</p>
+
+			<h3 class="_secondary-title" id="s7">7. SVD reveals the four fundamental subspaces</h3>
+
+			<p>Suppose $\operatorname{rank}(A) = r$. Then the singular vectors hand you all four fundamental subspaces, already equipped with orthonormal bases. On the output side,</p>
+
+			<div class="_math-block">$$
+\operatorname{Col}(A) = \operatorname{span}\{u_1, \ldots, u_r\}, \qquad N(A^{T}) = \operatorname{span}\{u_{r+1}, \ldots, u_m\},
+$$</div>
+
+			<p>and on the input side,</p>
+
+			<div class="_math-block">$$
+\operatorname{Row}(A) = \operatorname{span}\{v_1, \ldots, v_r\}, \qquad N(A) = \operatorname{span}\{v_{r+1}, \ldots, v_n\}.
+$$</div>
+
+			<p>The split is exactly where the singular values run out. Directions with $\sigma_i &gt; 0$ survive the transformation; directions past the $r$th are annihilated. Reading off the rank is then trivial &mdash; it is the number of nonzero singular values &mdash; and the orthogonal complements come for free, since the columns of $U$ and of $V$ were orthonormal to begin with.</p>
+
+			<p>This is a good reason to regard SVD as more than a computational device. It reorganises the entire subspace structure of $A$ into a single picture.</p>
+
+			<h3 class="_secondary-title" id="s8">8. SVD as a sum of rank-one matrices</h3>
+
+			<p>Multiplying out $U\Sigma V^{T}$ column by column gives a different and very useful form:</p>
+
+			<div class="_math-block">$$
+\boxed{\;A = \sigma_1 u_1 v_1^{T} + \sigma_2 u_2 v_2^{T} + \cdots + \sigma_r u_r v_r^{T}\;}
+$$</div>
+
+			<p>Each outer product $u_i v_i^{T}$ is an $m \times n$ matrix of rank one &mdash; about as simple as a matrix can be without being zero. So SVD expresses an arbitrary rank-$r$ matrix as a sum of exactly $r$ extremely simple matrices, and the sum is ordered: the terms come with decreasing weights $\sigma_1 \geq \sigma_2 \geq \cdots$.</p>
+
+			<p>That ordering is what makes the expansion valuable:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\text{complicated matrix} = \text{dominant pattern} + \text{next pattern} + \cdots\;}
+$$</div>
+
+			<p>where the importance of the $i$th pattern is measured by $\sigma_i$. The matrix has been decomposed into layers of structure, strongest first.</p>
+
+			<h3 class="_secondary-title" id="s9">9. The first singular component</h3>
+
+			<p>The leading term $A_1 = \sigma_1 u_1 v_1^{T}$ captures the strongest rank-one structure inside $A$. Adding the next term,</p>
+
+			<div class="_math-block">$$
+A_2 = \sigma_1 u_1 v_1^{T} + \sigma_2 u_2 v_2^{T},
+$$</div>
+
+			<p>captures the two strongest components, and in general we truncate after $k$ terms:</p>
+
+			<div class="_math-block">$$
+\boxed{\;A_k = \sum_{i=1}^{k} \sigma_i u_i v_i^{T}\;}
+$$</div>
+
+			<p>This is the <strong>truncated SVD</strong>. The remarkable part is not that it is a convenient approximation. It is that among all rank-$k$ matrices, it is the best one.</p>
+
+			<h3 class="_secondary-title" id="s10">10. The Eckart&ndash;Young&ndash;Mirsky theorem</h3>
+
+			<p>Suppose we want the closest rank-$k$ approximation to $A$. There are infinitely many rank-$k$ matrices to choose from, and no obvious reason the answer should be simple. But it is: among <strong>every</strong> matrix $B$ with $\operatorname{rank}(B) \leq k$, the truncated SVD $A_k$ minimises the error. In the Frobenius norm,</p>
+
+			<div class="_math-block">$$
+\boxed{\;\|A - A_k\|_F = \sqrt{\sum_{i=k+1}^{r} \sigma_i^2}\;}
+$$</div>
+
+			<p>and in the spectral $2$-norm,</p>
+
+			<div class="_math-block">$$
+\boxed{\;\|A - A_k\|_2 = \sigma_{k+1}.\;}
+$$</div>
+
+			<p>This is the Eckart&ndash;Young&ndash;Mirsky theorem, and it is one of the deepest practical reasons for the success of SVD. Note what it says about the error: it is written entirely in terms of the singular values you threw away. Before computing any approximation, the spectrum already tells you how good it will be.</p>
+
+			<div class="_note">
+				<span class="_note-label">On uniqueness</span>
+				<p>$A_k$ is a best approximation; it is the <em>unique</em> one precisely when $\sigma_k &gt; \sigma_{k+1}$. If the two coincide, the truncation cuts through a tied group of directions, any rotation within that group does equally well, and the minimiser is not unique.</p>
+			</div>
+
+			<p>The consequence is the one everyone uses. If $\sigma_1, \sigma_2, \sigma_3$ are large while $\sigma_4, \sigma_5, \ldots$ are tiny, then essentially all of the information in $A$ lives in three directions. Rather than storing the whole matrix, keep</p>
+
+			<div class="_math-block">$$
+\sigma_1 u_1 v_1^{T} + \sigma_2 u_2 v_2^{T} + \sigma_3 u_3 v_3^{T}
+$$</div>
+
+			<p>and discard the rest. This is dimensionality reduction in its most fundamental linear-algebraic form, and the theorem certifies that nothing better exists at that rank.</p>
+
+			<h3 class="_secondary-title" id="s11">11. Why image compression works</h3>
+
+			<p>Consider a grayscale image stored as $A \in \mathbb{R}^{m \times n}$, where each entry $a_{ij}$ is a pixel intensity, and write its SVD as before. A photograph usually contains strong spatial redundancy: neighbouring pixels are related, large regions are nearly uniform, structures repeat. That redundancy shows up as rapidly decaying singular values,</p>
+
+			<div class="_math-block">$$
+\sigma_1 \gg \sigma_2 \gg \sigma_3 \gg \cdots,
+$$</div>
+
+			<p>which is exactly the situation in which truncation is cheap. Keeping $k$ terms means storing $k$ vectors of length $m$, $k$ vectors of length $n$, and $k$ singular values:</p>
+
+			<div class="_math-block">$$
+\boxed{\;k(m + n + 1) \;\text{ numbers instead of }\; mn.\;}
+$$</div>
+
+			<p>The approximation is therefore worth doing whenever</p>
+
+			<div class="_math-block">$$
+k &lt; \frac{mn}{m + n + 1},
+$$</div>
+
+			<p>which for a square image of side $n$ is roughly $k &lt; n/2$. In practice useful reconstructions often need far fewer terms than that, so the saving can be substantial &mdash; and the Eckart&ndash;Young&ndash;Mirsky theorem guarantees that for the storage budget spent, no rank-$k$ scheme reproduces the image more faithfully.</p>
+
+			<h3 class="_secondary-title" id="s12">12. SVD and noise</h3>
+
+			<p>Suppose</p>
+
+			<div class="_math-block">$$
+A = A_{\text{signal}} + E,
+$$</div>
+
+			<p>where $E$ represents noise. If the structure in $A_{\text{signal}}$ is approximately low rank, it will tend to concentrate in the first few singular values, while noise &mdash; having no preferred direction &mdash; spreads itself thinly across all of them. Truncating therefore acts as a form of regularisation: we deliberately discard the weak directions, keeping $A_k$ and throwing away what is left.</p>
+
+			<p>It is worth being careful here. "Small singular value" and "noise" are not synonyms; whether the identification is justified depends on the data and on the modelling assumptions, and a genuinely small but real effect will be discarded along with the noise. But as a working principle, in problems where the signal really is low rank and the noise really is diffuse, it is remarkably effective.</p>
+
+			<h3 class="_secondary-title" id="s13">13. Numerical rank</h3>
+
+			<p>Exact mathematical rank is a discrete quantity, and that makes it fragile. Consider a matrix whose singular values are</p>
+
+			<div class="_math-block">$$
+\sigma = (100,\; 30,\; 4,\; 0.000001).
+$$</div>
+
+			<p>All four are nonzero, so $\operatorname{rank}(A) = 4$, exactly. Yet the matrix behaves for every practical purpose like a rank-three matrix, and the tiny fourth direction is more likely to be rounding error or measurement noise than real structure.</p>
+
+			<p>Worse, rank computed by exact arithmetic is discontinuous: an arbitrarily small perturbation can turn a rank-three matrix into a full-rank one. SVD replaces this brittle notion with a stable one,</p>
+
+			<div class="_math-block">$$
+\boxed{\;\text{numerical rank} = \#\{\,i : \sigma_i &gt; \text{tol}\,\}\;}
+$$</div>
+
+			<p>treating singular values below a tolerance as zero. Because Eckart&ndash;Young&ndash;Mirsky tells us $\sigma_{k+1}$ is exactly the distance from $A$ to the nearest rank-$k$ matrix, this is not an arbitrary convention: it says the matrix is within $\text{tol}$ of one with that exact rank. SVD is the standard tool for detecting near-dependencies precisely because it measures <em>how close</em> to singular a matrix is, not merely whether it is.</p>
+
+			<h3 class="_secondary-title" id="s14">14. SVD and the Moore&ndash;Penrose pseudoinverse</h3>
+
+			<p>Suppose we want to solve $Ax = b$. If $A$ is square and invertible, $x = A^{-1}b$ and there is nothing to discuss. Real problems are rarely so accommodating: $A$ may be rectangular, rank-deficient, or both, in which case the system may have no solution or infinitely many.</p>
+
+			<p>SVD gives the natural generalisation of the inverse. Starting from $A = U\Sigma V^{T}$, define $\Sigma^{\dagger} \in \mathbb{R}^{n \times m}$ by transposing $\Sigma$ and replacing each nonzero $\sigma_i$ with $1/\sigma_i$, leaving the zeros alone. Then</p>
+
+			<div class="_math-block">$$
+\boxed{\;A^{\dagger} = V\Sigma^{\dagger}U^{T}\;}
+$$</div>
+
+			<p>is the <strong>Moore&ndash;Penrose pseudoinverse</strong>, and</p>
+
+			<div class="_math-block">$$
+\boxed{\;x^{\ast} = A^{\dagger}b\;}
+$$</div>
+
+			<p>is the minimum-norm least-squares solution. That single description covers both awkward cases at once: among all $x$ minimising $\|Ax - b\|_2$, it returns the one of smallest norm. If the system is overdetermined and inconsistent, the least-squares part does the work; if it is underdetermined with infinitely many exact solutions, the minimum-norm part picks one canonically.</p>
+
+			<p>The geometry is transparent in the SVD basis. Applying $U^{T}$ expresses $b$ in the output basis; the nonzero part of $\Sigma^{\dagger}$ undoes the stretching in the $r$ directions where $A$ actually acted; the zeros ignore the components of $b$ lying in $N(A^{T})$, which no $x$ could have produced, and refuse to assign anything to $N(A)$, which is what keeps the answer's norm minimal. Inverting where inversion makes sense, and projecting away where it does not.</p>
+
+			<div class="_note">
+				<span class="_note-label">Why the tolerance matters</span>
+				<p>Notice what $1/\sigma_i$ does to a very small but nonzero singular value: it becomes enormous, and any noise in $b$ along that direction is amplified by the same factor. This is why practical pseudoinverse computations truncate at a tolerance rather than inverting every nonzero $\sigma_i$ &mdash; the same idea as numerical rank, and closely related to Tikhonov regularisation.</p>
+			</div>
+
+			<h3 class="_secondary-title" id="s15">15. Condition numbers and ill-conditioning</h3>
+
+			<p>Suppose $A$ is square and of full rank. Its spectral condition number is</p>
+
+			<div class="_math-block">$$
+\boxed{\;\kappa_2(A) = \frac{\sigma_{\max}}{\sigma_{\min}} = \frac{\sigma_1}{\sigma_r}.\;}
+$$</div>
+
+			<p>If $\sigma_r$ is extremely small then $1/\sigma_r$ is extremely large, and small perturbations in the data get amplified by that factor when solving $Ax = b$. The problem is ill-conditioned &mdash; not because the algorithm is bad, but because the matrix itself destroys information along one direction, and no algorithm can recover what the matrix discarded.</p>
+
+			<p>Geometrically this is the circle-to-ellipse picture again, in a degenerate regime. The transformation maps the unit sphere to a very thin ellipsoid: one direction stretched a great deal, another nearly flattened. Inverting means re-inflating the flattened direction, which magnifies whatever error happened to lie there. So the condition number measures anisotropy:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\kappa_2(A) = \frac{\text{maximum stretching}}{\text{minimum stretching}}\;}
+$$</div>
+
+			<p>A perfectly conditioned matrix has $\kappa_2 = 1$ and stretches every direction equally &mdash; a scaled orthogonal matrix, which maps the sphere to a sphere.</p>
+
+			<h3 class="_secondary-title" id="s16">16. SVD versus eigenvalue decomposition</h3>
+
+			<p>The two decompositions answer different questions. Eigendecomposition $A = Q\Lambda Q^{-1}$ describes <em>invariant</em> directions, $Av_i = \lambda_i v_i$: feed in $v_i$ and the same direction comes back. SVD describes <em>input-output</em> directions, $Av_i = \sigma_i u_i$: feed in $v_i$ and a possibly different direction comes out.</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead>
+						<tr><th></th><th>Eigendecomposition</th><th>SVD</th></tr>
+					</thead>
+					<tbody>
+						<tr><td>Applies to</td><td>Square matrices</td><td>Every real matrix</td></tr>
+						<tr><td>Always exists</td><td>No</td><td>Yes</td></tr>
+						<tr><td>Basis</td><td>Not generally orthogonal</td><td>Orthonormal on both sides</td></tr>
+						<tr><td>Values</td><td>$\lambda_i$ real, negative or complex</td><td>$\sigma_i \geq 0$, always real</td></tr>
+						<tr><td>Question answered</td><td>What is preserved?</td><td>What goes where, and how much?</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p>For a symmetric matrix the two nearly coincide, and the relationship is exactly</p>
+
+			<div class="_math-block">$$
+\boxed{\;\sigma_i = |\lambda_i|\;}
+$$</div>
+
+			<p>with the singular vectors equal to the eigenvectors up to sign &mdash; a negative eigenvalue becomes a positive singular value with the corresponding $u_i$ flipped, since SVD records stretching in a magnitude and puts the direction reversal into $U$.</p>
+
+			<p>One more connection worth knowing: since $|\det U| = |\det V| = 1$ for orthogonal matrices, a square matrix satisfies</p>
+
+			<div class="_math-block">$$
+|\det A| = \sigma_1 \sigma_2 \cdots \sigma_n,
+$$</div>
+
+			<p>so the determinant measures volume scaling, which is just the product of the stretching factors along the principal axes. A single small singular value drags the determinant toward zero, which is the algebraic shadow of the flattened ellipsoid from the previous section.</p>
+
+			<h3 class="_secondary-title" id="s17">17. SVD and principal component analysis</h3>
+
+			<p>Let a <em>centred</em> dataset be $X \in \mathbb{R}^{m \times n}$, with $m$ samples in rows and $n$ features in columns, each column having mean zero. Take its SVD, $X = U\Sigma V^{T}$. Then</p>
+
+			<div class="_math-block">$$
+X^{T}X = V\Sigma^{T}\Sigma V^{T} = V\Sigma^2 V^{T},
+$$</div>
+
+			<p>and the sample covariance matrix is</p>
+
+			<div class="_math-block">$$
+C = \frac{1}{m-1}X^{T}X = V\left(\frac{\Sigma^2}{m-1}\right)V^{T}.
+$$</div>
+
+			<p>That is already an eigendecomposition of $C$, so we can read the answer off directly: the principal directions are the columns of $V$, and the variance captured by the $i$th is $\sigma_i^2/(m-1)$.</p>
+
+			<div class="_math-block">$$
+\boxed{\;\text{PCA directions} = \text{right singular vectors of the centred data}, \qquad \text{explained variance} \propto \sigma_i^2.\;}
+$$</div>
+
+			<p>So PCA is not merely related to SVD; PCA <em>is</em> SVD applied to centred data. This is also how PCA is computed in practice, since taking the SVD of $X$ avoids ever forming $X^{T}X$ and the loss of accuracy that comes with it. The centring genuinely matters: SVD of uncentred data gives directions of largest second moment rather than largest variance, and the leading direction usually just points at the mean.</p>
+
+			<h3 class="_secondary-title" id="s18">18. SVD and recommendation systems</h3>
+
+			<p>Imagine a matrix $R$ whose rows are users and whose columns are movies, with $r_{ij}$ the rating user $i$ gave movie $j$. The raw matrix may be enormous, but preferences plausibly depend on far fewer underlying factors &mdash; a taste for action, for comedy, for slow character studies. If so, $R$ is approximately low rank, and a truncated factorisation</p>
+
+			<div class="_math-block">$$
+R_k = U_k \Sigma_k V_k^{T}
+$$</div>
+
+			<p>exposes that latent structure. The columns of $U_k$ describe user-side latent directions, the columns of $V_k$ describe item-side latent directions, and the singular values say how strong each factor is. Two users with similar coordinates in the latent space have similar taste, even if they have never rated the same film.</p>
+
+			<div class="_note">
+				<span class="_note-label">What this picture leaves out</span>
+				<p>Real rating matrices are mostly <em>missing</em>, not mostly zero, and classical SVD has no notion of a missing entry &mdash; filling the gaps with zeros quietly asserts that every unrated film was rated badly. Production systems therefore use matrix factorisation models fitted only to the observed entries, typically by regularised least squares or gradient descent. These are usually described as "SVD" in the recommender literature, but they are an optimisation problem inspired by the decomposition, not the decomposition itself.</p>
+			</div>
+
+			<h3 class="_secondary-title" id="s19">19. A small worked example</h3>
+
+			<p>Take</p>
+
+			<div class="_math-block">$$
+A = \begin{bmatrix} 3 & 0 \\ 4 & 5 \end{bmatrix}.
+$$</div>
+
+			<p>First compute</p>
+
+			<div class="_math-block">$$
+A^{T}A = \begin{bmatrix} 3 & 4 \\ 0 & 5 \end{bmatrix} \begin{bmatrix} 3 & 0 \\ 4 & 5 \end{bmatrix} = \begin{bmatrix} 25 & 20 \\ 20 & 25 \end{bmatrix},
+$$</div>
+
+			<p>whose eigenvalues are $25 \pm 20$, namely $45$ and $5$. The singular values are their square roots:</p>
+
+			<div class="_math-block">$$
+\sigma_1 = \sqrt{45} = 3\sqrt{5}, \qquad \sigma_2 = \sqrt{5}.
+$$</div>
+
+			<p>The corresponding normalised eigenvectors are</p>
+
+			<div class="_math-block">$$
+v_1 = \frac{1}{\sqrt{2}}\begin{bmatrix} 1 \\ 1 \end{bmatrix}, \qquad v_2 = \frac{1}{\sqrt{2}}\begin{bmatrix} -1 \\ 1 \end{bmatrix}.
+$$</div>
+
+			<p>Now build the left singular vectors from $u_i = Av_i/\sigma_i$. For the first,</p>
+
+			<div class="_math-block">$$
+Av_1 = \frac{1}{\sqrt{2}}\begin{bmatrix} 3 \\ 9 \end{bmatrix} \quad\Longrightarrow\quad u_1 = \frac{1}{3\sqrt{5}} \cdot \frac{1}{\sqrt{2}}\begin{bmatrix} 3 \\ 9 \end{bmatrix} = \frac{1}{\sqrt{10}}\begin{bmatrix} 1 \\ 3 \end{bmatrix},
+$$</div>
+
+			<p>and for the second,</p>
+
+			<div class="_math-block">$$
+Av_2 = \frac{1}{\sqrt{2}}\begin{bmatrix} -3 \\ 1 \end{bmatrix} \quad\Longrightarrow\quad u_2 = \frac{1}{\sqrt{10}}\begin{bmatrix} -3 \\ 1 \end{bmatrix}.
+$$</div>
+
+			<p>Assembling the three factors,</p>
+
+			<div class="_math-block">$$
+U = \frac{1}{\sqrt{10}}\begin{bmatrix} 1 & -3 \\ 3 & 1 \end{bmatrix}, \qquad \Sigma = \begin{bmatrix} 3\sqrt{5} & 0 \\ 0 & \sqrt{5} \end{bmatrix}, \qquad V = \frac{1}{\sqrt{2}}\begin{bmatrix} 1 & -1 \\ 1 & 1 \end{bmatrix},
+$$</div>
+
+			<p>and multiplying back confirms it:</p>
+
+			<div class="_math-block">$$
+U\Sigma V^{T} = \frac{1}{\sqrt{20}}\begin{bmatrix} 1 & -3 \\ 3 & 1 \end{bmatrix}\begin{bmatrix} 3\sqrt{5} & 3\sqrt{5} \\ -\sqrt{5} & \sqrt{5} \end{bmatrix} = \frac{1}{2\sqrt{5}}\begin{bmatrix} 6\sqrt{5} & 0 \\ 8\sqrt{5} & 10\sqrt{5} \end{bmatrix} = \begin{bmatrix} 3 & 0 \\ 4 & 5 \end{bmatrix} = A.
+$$</div>
+
+			<p>As a second check, $\det A = 15$ and $\sigma_1\sigma_2 = 3\sqrt{5}\cdot\sqrt{5} = 15$, matching the determinant identity from Section 16.</p>
+
+			<p>But the numbers matter less than what they say. The direction $v_1$, running diagonally at $45^\circ$, is stretched by $\sqrt{45} \approx 6.7$, while the perpendicular direction $v_2$ is stretched only by $\sqrt{5} \approx 2.2$. The matrix looked like four arbitrary entries; SVD has extracted the two natural axes along which it acts, and the factor by which it acts on each.</p>
+
+			<h3 class="_secondary-title" id="s20">20. The deeper idea</h3>
+
+			<p>SVD is usually introduced as a formula, $A = U\Sigma V^{T}$. But its real content is about <em>choosing the right coordinates</em>.</p>
+
+			<p>In the standard basis, the action of $A$ looks complicated. It mixes coordinates: every output entry depends on every input entry, and there is no obvious structure in the table of numbers. SVD finds special orthonormal bases &mdash; one for the input space, one for the output space &mdash; in which that same transformation becomes just $\Sigma$. And $\Sigma$ does nothing mysterious at all. It says</p>
+
+			<div class="_math-block">$$
+z_1 \mapsto \sigma_1 z_1, \qquad z_2 \mapsto \sigma_2 z_2, \qquad \ldots
+$$</div>
+
+			<p>The transformation has been reduced to a list of independent stretches. Nothing was approximated and nothing was lost; the complexity was an artefact of describing the map in the wrong basis. So</p>
+
+			<div class="_math-block">$$
+\boxed{\;A = U\Sigma V^{T}\;}
+$$</div>
+
+			<p>should be read as the statement that <strong>a complicated linear transformation is simple when viewed from the correct input and output bases</strong> &mdash; and that for a linear map, such bases always exist.</p>
+
+			<h3 class="_secondary-title" id="conclusion">Conclusion</h3>
+
+			<p>Singular Value Decomposition is one of the central organising ideas of linear algebra because a single computation answers so many separate questions at once. Given a matrix $A$, its SVD tells us:</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead>
+						<tr><th>Question</th><th>Answer</th></tr>
+					</thead>
+					<tbody>
+						<tr><td>Which input directions matter?</td><td>$v_i$</td></tr>
+						<tr><td>Where do they go?</td><td>$u_i$</td></tr>
+						<tr><td>How strongly are they transformed?</td><td>$\sigma_i$</td></tr>
+						<tr><td>What is the rank?</td><td>$\#\{\sigma_i &gt; 0\}$</td></tr>
+						<tr><td>Which directions are nearly redundant?</td><td>those with $\sigma_i \approx 0$</td></tr>
+						<tr><td>What is the best rank-$k$ approximation?</td><td>$A_k$</td></tr>
+						<tr><td>How do we solve singular systems?</td><td>$A^{\dagger} = V\Sigma^{\dagger}U^{T}$</td></tr>
+						<tr><td>How sensitive is the problem?</td><td>$\kappa_2(A) = \sigma_1/\sigma_r$</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p>At the geometric level, SVD finds the natural axes of a linear transformation. At the algebraic level, it writes that transformation as</p>
+
+			<div class="_math-block">$$
+A = \sum_{i=1}^{r} \sigma_i u_i v_i^{T}.
+$$</div>
+
+			<p>At the level of data, it ranks hidden patterns by importance. And computationally, it underwrites compression, regularisation, dimensionality reduction, least squares, PCA, denoising and latent-factor discovery &mdash; all of which are the same theorem wearing different clothes.</p>
+
+			<p>Perhaps the most useful way to remember it is therefore not the formula but the sentence behind it:</p>
+
+			<div class="_math-block">$$
+\boxed{\;\text{rotate into meaningful directions} \;\longrightarrow\; \text{measure their importance} \;\longrightarrow\; \text{rotate into the output space}.\;}
+$$</div>
+
+			<p>That is the hidden geometry SVD extracts from a matrix &mdash; and the reason a table of numbers is never just a table of numbers.</p>
+
+			<h4 class="_tertiary-title" id="further-reading">Further reading</h4>
+
+			<ul class="_list">
+				<li>Trefethen &amp; Bau. <em>Numerical Linear Algebra</em>. SIAM, 1997, Lectures 4&ndash;5. &mdash; the geometric derivation, done properly.</li>
+				<li>Golub &amp; Van Loan. <em>Matrix Computations</em>. Johns Hopkins University Press. &mdash; the standard reference on computing the SVD stably.</li>
+				<li>Strang. <em>Linear Algebra and Learning from Data</em>. Wellesley&ndash;Cambridge Press, 2019. &mdash; SVD, low-rank approximation and PCA from an applied angle.</li>
+				<li>Horn &amp; Johnson. <em>Matrix Analysis</em>. Cambridge University Press. &mdash; singular value inequalities and the underlying theory.</li>
+				<li>Eckart &amp; Young. <em>The approximation of one matrix by another of lower rank</em>. Psychometrika, 1936. &mdash; the original low-rank approximation result.</li>
+				<li>Mirsky. <em>Symmetric gauge functions and unitarily invariant norms</em>. Quarterly Journal of Mathematics, 1960. &mdash; the generalisation to all unitarily invariant norms.</li>
+				<li>IBM. <em>What Is Singular Value Decomposition?</em> <a href="https://www.ibm.com/think/topics/singular-value-decomposition" target="_blank">ibm.com/think/topics/singular-value-decomposition</a></li>
+			</ul>
+
+			<nav class="_bottom-navigation" aria-label="bottom-navigation">
+				<ul>
+					<li><a href="../../index.html">Home</a></li>
+					<span aria-hidden="true">-</span>
+					<li><a href="./posts.html">Posts</a></li>
+				</ul>
+			</nav>
+		</section>
+
+		<div id="notice">
+			Repository: <a href="https://github.com/abhinaash-broski/Portfolio" target="_blank">https://github.com/abhinaash-broski/Portfolio</a>
+		</div>
+	</main>
+
+	<footer>
+		<p class="__footer-copyright">&copy; Copyrights, Abhinaash Tiwari</p>
+	</footer>
+</body>
+</html>

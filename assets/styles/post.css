@@ -1,0 +1,155 @@
+._thumbnail {
+	max-height: 10rem;
+	object-fit: cover;
+}
+
+._title-date {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	border-block-end: var(--border-shorthand);
+}
+
+._title-date h2 {
+	margin: 0;
+}
+
+._byline {
+	margin-block-start: 0.9em;
+}
+
+._secondary-title {
+	margin-block-start: 2.2em;
+}
+
+._tertiary-title {
+	margin-block-start: 1.6em;
+}
+
+._image {
+	margin-block: 1em;
+}
+
+/* Table of contents */
+
+._toc {
+	border: var(--border-shorthand);
+	padding: 0.9em 1.2em;
+	margin-block: 1.6em;
+}
+
+._toc p {
+	margin-block-start: 0;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+._toc ol {
+	margin: 0;
+	padding-inline-start: 1.2em;
+}
+
+._toc li {
+	margin-block-end: 0.3em;
+}
+
+/* Margin note / technical aside */
+
+._note {
+	border-inline-start: 0.1875rem solid var(--accent);
+	padding-inline-start: 0.9375rem;
+	padding-block: 0.15em;
+	margin-block: 1.4em;
+	font-size: 0.94em;
+}
+
+._note p {
+	margin-block: 0.4em;
+}
+
+._note-label {
+	display: block;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--accent);
+	margin-block-end: 0.2em;
+}
+
+/* Math */
+
+._math-block {
+	overflow-x: auto;
+	margin-block: 1.1em;
+}
+
+mjx-container {
+	font-size: 0.97em !important;
+}
+
+/* Tables */
+
+._table-wrap {
+	overflow-x: auto;
+	margin-block: 1.2em;
+}
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--font-size-primary);
+}
+
+th {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	text-align: left;
+	padding: 0.5em 0.8em;
+	border-block-end: 0.125rem solid var(--ink);
+}
+
+td {
+	padding: 0.6em 0.8em;
+	border-block-end: var(--border-shorthand);
+	text-align: left;
+	vertical-align: top;
+}
+
+/* Lists */
+
+._list {
+	margin-block: 1em;
+}
+
+._list li {
+	margin-block-end: 0.4em;
+}
+
+/* Bottom navigation */
+
+._bottom-navigation {
+	display: flex;
+	justify-content: center;
+	margin-block-start: 1.3em;
+	margin-block-end: 1em; /* Remove if #notice is not there. */
+}
+
+._bottom-navigation ul {
+	display: flex;
+	gap: 1.4rem;
+	margin: 0;
+	padding: 0;
+	list-style-type: none;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+._bottom-navigation a { text-decoration: none; }

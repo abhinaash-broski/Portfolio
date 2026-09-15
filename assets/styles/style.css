@@ -1,16 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 :root {
-	--font-size-primary: 0.906rem; /* 14.5px */
-	--font-size-secondary: 0.688rem; /* 11px */
+	--font-size-primary: 1rem; /* 16px */
+	--font-size-secondary: 0.75rem; /* 12px */
 
-	--foreground: rgba(0, 0, 0, 0.75);
+	--paper: #f7f3ea;
+	--desk: #ece5d3;
+	--dot-color: rgba(43, 41, 37, 0.16);
+	--ink: #2b2925;
 
-	--border-color: rgba(0, 0, 0, 0.55);
+	--foreground: rgba(43, 41, 37, 0.82);
+
+	--rule-color: rgba(43, 41, 37, 0.45);
+	--border-color: var(--rule-color);
 	--border-shorthand: 0.063rem solid var(--border-color);
 
+	--accent: #9c4a3c;
+
+	--font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+	--font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+
 	/* Button */
-	--button-hover-foreground: rgba(255, 255, 255, 0.9);
-	--button-hover-backround: rgba(0, 0, 0, 0.78);
-	--font-size-button: 0.769rem; /* 12.3px */
+	--button-hover-foreground: var(--paper);
+	--button-hover-backround: var(--ink);
+	--font-size-button: 0.75rem; /* 12px */
 
 	--seven: 0.438rem; /* 7px */
 	--twelve: 0.75rem; /* 12px */
@@ -21,22 +34,66 @@
 	box-sizing: border-box;
 }
 
+html {
+	background: var(--desk);
+}
+
 body {
 	min-height: 100vh;
 	margin: 0;
+	font-family: var(--font-serif);
 	font-size: var(--font-size-primary);
+	line-height: 1.65;
+	background-color: var(--desk);
+	background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
+	background-size: 1.375rem 1.375rem;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	font-family: var(--font-serif);
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--ink);
+}
+
+main h2, main h3, main h4 {
+	margin-block-start: 1.5em;
+	margin-block-end: 0.6em;
+}
+
+li::marker {
+	color: var(--accent);
 }
 
 img {
 	display: block;
 	height: auto;
 	max-width: 100%;
+	border: var(--border-shorthand);
 }
 
 .container__ {
-	max-width: 37.5rem;
+	max-width: 50rem;
 	margin-inline: auto;
 	padding: 0 calc(var(--twelve) * 2);
+}
+
+/* Page card: lifts the readable column off the desk texture */
+
+main.container__ {
+	background: var(--paper);
+	box-shadow: 0 0 2.5rem rgba(43, 41, 37, 0.1);
+	padding-block: 2rem 2.5rem;
+}
+
+/* Notebook margin rule */
+
+@media (min-width: 30rem) {
+	header.container__,
+	main.container__ {
+		border-inline-start: 0.125rem solid var(--accent);
+		padding-inline-start: calc(var(--twelve) * 2 + 0.9rem);
+	}
 }
 
 /* Header */
@@ -45,8 +102,19 @@ header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	border-block-end: var(--border-shorthand);
-	margin-block-end: 1.75rem;
+	border-block-end: 0.125rem solid var(--ink);
+	margin-block-end: 2rem;
+	padding-block: 1.15em;
+}
+
+.__header-title {
+	margin: 0;
+	font-size: 1.4rem;
+}
+
+.__header-title a {
+	font-style: italic;
+	font-weight: 600;
 }
 
 header a {
@@ -56,24 +124,33 @@ header a {
 
 .__header-nav ul {
 	display: flex;
-	gap: 1.125rem;
+	gap: 1.35rem;
 	margin: 0;
 	padding: 0;
 	list-style-type: none;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
 }
 
 .current-page__ {
-	border-block-end: var(--border-shorthand);
+	border-block-end: 0.125rem solid var(--accent);
+	color: var(--accent);
 }
 
 /* Footer */
 
 footer {
-	color: white;
-	background: var(--foreground);
-	padding: 1em calc(var(--twelve) * 2);
-	margin-block-start: 2.5rem;
+	background: transparent;
+	border-block-start: var(--border-shorthand);
+	padding: 1.3em calc(var(--twelve) * 2);
+	margin-block-start: 3rem;
 	text-align: center;
+
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	letter-spacing: 0.04em;
 
 	position: sticky;
 	inset-block-start: 100%;
@@ -88,9 +165,11 @@ footer {
 #notice {
 	margin-top: 0.656rem;
 	padding: 0 var(--seven);
+	font-family: var(--font-mono);
 	font-size: var(--font-size-secondary);
+	color: rgba(43, 41, 37, 0.55);
 	text-align: center;
-	line-height: 1.1;
+	line-height: 1.4;
 	word-wrap: break-word;
 }
 
@@ -98,7 +177,7 @@ footer {
 
 @media (hover: hover) {
 	.__header-nav ul li a:hover {
-		border-block-end: var(--border-shorthand);
+		border-block-end: 0.125rem solid var(--accent);
 	}
 }
 
