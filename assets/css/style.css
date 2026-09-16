@@ -1,17 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-	--font-size-primary: 1rem; /* 16px */
+	/* Scales gently with viewport so the wide column keeps a readable line length */
+	--font-size-primary: clamp(1rem, 0.85rem + 0.35vw, 1.2rem);
 	--font-size-secondary: 0.75rem; /* 12px */
 
-	--paper: #f7f3ea;
-	--desk: #ece5d3;
-	--dot-color: rgba(43, 41, 37, 0.16);
-	--ink: #2b2925;
+	--paper: #faf9f6;
+	--ink: #1e1d1b;
 
-	--foreground: rgba(43, 41, 37, 0.82);
+	--foreground: rgba(30, 29, 27, 0.84);
 
-	--rule-color: rgba(43, 41, 37, 0.45);
+	--rule-color: rgba(30, 29, 27, 0.22);
 	--border-color: var(--rule-color);
 	--border-shorthand: 0.063rem solid var(--border-color);
 
@@ -19,6 +18,8 @@
 
 	--font-serif: 'Lora', Georgia, 'Times New Roman', serif;
 	--font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+
+	--content-width: 70vw;
 
 	/* Button */
 	--button-hover-foreground: var(--paper);
@@ -35,7 +36,7 @@
 }
 
 html {
-	background: var(--desk);
+	background: var(--paper);
 }
 
 body {
@@ -43,10 +44,9 @@ body {
 	margin: 0;
 	font-family: var(--font-serif);
 	font-size: var(--font-size-primary);
-	line-height: 1.65;
-	background-color: var(--desk);
-	background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
-	background-size: 1.375rem 1.375rem;
+	line-height: 1.7;
+	background: var(--paper);
+	-webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -57,7 +57,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 main h2, main h3, main h4 {
-	margin-block-start: 1.5em;
+	margin-block-start: 1.6em;
 	margin-block-end: 0.6em;
 }
 
@@ -69,31 +69,13 @@ img {
 	display: block;
 	height: auto;
 	max-width: 100%;
-	border: var(--border-shorthand);
+	border-radius: 0.25rem;
 }
 
 .container__ {
-	max-width: 50rem;
+	width: var(--content-width);
 	margin-inline: auto;
 	padding: 0 calc(var(--twelve) * 2);
-}
-
-/* Page card: lifts the readable column off the desk texture */
-
-main.container__ {
-	background: var(--paper);
-	box-shadow: 0 0 2.5rem rgba(43, 41, 37, 0.1);
-	padding-block: 2rem 2.5rem;
-}
-
-/* Notebook margin rule */
-
-@media (min-width: 30rem) {
-	header.container__,
-	main.container__ {
-		border-inline-start: 0.125rem solid var(--accent);
-		padding-inline-start: calc(var(--twelve) * 2 + 0.9rem);
-	}
 }
 
 /* Header */
@@ -102,9 +84,9 @@ header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	border-block-end: 0.125rem solid var(--ink);
-	margin-block-end: 2rem;
-	padding-block: 1.15em;
+	border-block-end: var(--border-shorthand);
+	margin-block-end: 3rem;
+	padding-block: 1.5rem;
 }
 
 .__header-title {
@@ -118,24 +100,24 @@ header {
 }
 
 header a {
-	padding-block-end: 0.0625rem;
+	padding-block-end: 0.125rem;
 	text-decoration: none;
 }
 
 .__header-nav ul {
 	display: flex;
-	gap: 1.35rem;
+	gap: 1.6rem;
 	margin: 0;
 	padding: 0;
 	list-style-type: none;
 	font-family: var(--font-mono);
 	font-size: var(--font-size-secondary);
 	text-transform: uppercase;
-	letter-spacing: 0.06em;
+	letter-spacing: 0.08em;
 }
 
 .current-page__ {
-	border-block-end: 0.125rem solid var(--accent);
+	border-block-end: 0.0625rem solid var(--accent);
 	color: var(--accent);
 }
 
@@ -144,13 +126,13 @@ header a {
 footer {
 	background: transparent;
 	border-block-start: var(--border-shorthand);
-	padding: 1.3em calc(var(--twelve) * 2);
-	margin-block-start: 3rem;
+	padding: 1.5rem calc(var(--twelve) * 2);
+	margin-block-start: 4rem;
 	text-align: center;
 
 	font-family: var(--font-mono);
 	font-size: var(--font-size-secondary);
-	letter-spacing: 0.04em;
+	letter-spacing: 0.06em;
 
 	position: sticky;
 	inset-block-start: 100%;
@@ -163,11 +145,11 @@ footer {
 /* Notice / Link */
 
 #notice {
-	margin-top: 0.656rem;
+	margin-top: 2rem;
 	padding: 0 var(--seven);
 	font-family: var(--font-mono);
 	font-size: var(--font-size-secondary);
-	color: rgba(43, 41, 37, 0.55);
+	color: rgba(30, 29, 27, 0.5);
 	text-align: center;
 	line-height: 1.4;
 	word-wrap: break-word;
@@ -177,17 +159,17 @@ footer {
 
 @media (hover: hover) {
 	.__header-nav ul li a:hover {
-		border-block-end: 0.125rem solid var(--accent);
+		border-block-end: 0.0625rem solid var(--accent);
+	}
+}
+
+@media (max-width: 48rem) {
+	:root {
+		--content-width: 100%;
 	}
 }
 
 @media (max-width: 30rem) {
-	/* Font Size */
-	html {
-		font-size: calc(1rem - 10%);
-	}
-	/* -------- */
-
 	header {
 		flex-direction: column;
 	}
