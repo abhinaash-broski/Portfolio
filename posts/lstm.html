@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="author" content="Abhinaash Tiwari">
+	<meta name="description" content="Why ordinary recurrent networks forget, the one equation that fixes it, and how gates turn that fix into a trainable memory cell. A mathematical walkthrough of LSTM from the vanishing-gradient analysis to the modern cell, with backpropagation derived, a worked example, and a reference implementation.">
+	<meta name="keywords" content="LSTM, long short-term memory, recurrent neural networks, vanishing gradient, backpropagation through time, constant error carousel, forget gate, GRU, Hochreiter, Schmidhuber">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Long Short-Term Memory, from First Principles | Abhinaash Blog</title>
+
+	<link rel="icon" type="image/x-icon" href="#">
+	<link rel="stylesheet" type="text/css" href="../assets/css/style.css">
+	<link rel="stylesheet" type="text/css" href="../assets/css/post.css">
+
+	<script>
+		window.MathJax = {
+			tex: {
+				inlineMath: [['$', '$']],
+				displayMath: [['$$', '$$']]
+			}
+		};
+	</script>
+	<script defer id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.min.js"></script>
+</head>
+<body>
+	<header class="container__">
+		<h1 class="__header-title"><a href="../index.html">Abhinaash Blog</a></h1>
+		<nav class="__header-nav">
+			<ul>
+				<li><a href="../index.html">Home</a></li>
+				<li><a href="../about.html">About</a></li>
+				<li><a class="current-page__" href="../posts.html">Posts</a></li>
+				<li><a href="../resume.html">Resume</a></li>
+			</ul>
+		</nav>
+	</header>
+
+	<main class="container__">
+		<section class="__post">
+			<img class="_thumbnail" src="https://picsum.photos/seed/lstm/800/400?grayscale" width="800" height="400" alt="Article thumbnail.">
+			<div class="_title-date">
+				<h2>Long Short-Term Memory, from First Principles</h2>
+				<time datetime="2026-09-16"><i>September 16, 2026</i></time>
+			</div>
+
+			<p class="_byline"><em>Why ordinary recurrent networks forget, the one equation that fixes it, and how gates turn that fix into a trainable memory cell. A mathematical walkthrough based on Hochreiter &amp; Schmidhuber (1997) and Staudemeyer &amp; Rothstein Morris (2019).</em></p>
+
+			<figure class="_figure">
+				<div class="_lab">
+					<label><span>RNN per-step factor $|f'(\text{net})\,w|$ = <output id="aOut">0.90</output></span>
+						<input id="a" type="range" min="0.5" max="1.1" step="0.01" value="0.90"></label>
+					<label><span>LSTM forget gate $f_t$ = <output id="fOut">0.990</output></span>
+						<input id="f" type="range" min="0.80" max="1.00" step="0.005" value="0.99"></label>
+				</div>
+				<svg id="flow" class="_chart" viewBox="0 0 640 260" role="img" aria-label="Gradient magnitude versus steps back in time for a plain RNN and an LSTM cell"></svg>
+				<figcaption><span class="_figure-label"><span class="_swatch" style="background:var(--accent)"></span>plain RNN $|f'w|^q$<span class="_swatch" style="background:var(--ink)"></span>LSTM cell state $f^q$ &nbsp;&middot;&nbsp; after 100 steps: <span id="readout"></span></span><br>How much of an error signal survives after travelling $q$ steps back in time (log scale). Move the sliders: the RNN curve collapses unless the factor sits at exactly $1$, which is the whole idea behind LSTM.</figcaption>
+			</figure>
+
+			<div class="_toc">
+				<p>Contents</p>
+				<ol>
+					<li><a href="#s1">The sequence problem</a></li>
+					<li><a href="#s2">RNNs and backpropagation through time</a></li>
+					<li><a href="#s3">Why gradients vanish or explode</a></li>
+					<li><a href="#s4">The constant error carousel</a></li>
+					<li><a href="#s5">Gates: the 1997 memory cell</a></li>
+					<li><a href="#s6">Truncated learning and exact error flow</a></li>
+					<li><a href="#s7">Forget gates</a></li>
+					<li><a href="#s8">The modern LSTM in vector form</a></li>
+					<li><a href="#s9">Backpropagation through the modern cell</a></li>
+					<li><a href="#s10">A worked scalar example</a></li>
+					<li><a href="#s11">A reference implementation</a></li>
+					<li><a href="#s12">Cost, and the family of variants</a></li>
+					<li><a href="#s13">What the 1997 experiments showed</a></li>
+					<li><a href="#s14">Limitations</a></li>
+					<li><a href="#references">References</a></li>
+				</ol>
+			</div>
+
+			<h3 class="_secondary-title" id="s1">1. The sequence problem</h3>
+
+			<p>A feed-forward network computes a static map $y = F(x)$. Many problems are not static: the right output at time $t$ depends on inputs seen at $t-1, t-2, \dots, t-1000$. Speech, handwriting, price series and text all have this shape. To model them we need a <em>dynamic</em> classifier, one with state that carries information forward.</p>
+
+			<p>Recurrent networks provide that state. In practice, however, a plain RNN trained by gradient descent can only exploit dependencies spanning roughly 5 to 10 steps. LSTM was designed to push that horizon beyond 1,000 steps. To see why it works, we first need to see precisely why the plain RNN fails.</p>
+
+			<h3 class="_secondary-title" id="s2">2. RNNs and backpropagation through time</h3>
+
+			<p>Take a fully recurrent network with non-input units $U$ and input units $I$. Each unit $u$ has activation function $f_u$, and $W_{[u,v]}$ is the weight from $v$ to $u$. The forward dynamics are</p>
+
+			<div class="_math-block">$$
+z_u(\tau+1) = \sum_{v\in U} W_{[u,v]}\, y_v(\tau) + \sum_{i\in I} W_{[u,i]}\, y_i(\tau+1),
+\qquad y_u(\tau) = f_u\big(z_u(\tau)\big).
+$$</div>
+
+			<p>Over an epoch $[t', t]$ we minimise the summed squared error</p>
+
+			<div class="_math-block">$$
+E_{\text{total}}(t',t) = \sum_{\tau=t'}^{t} E(\tau),\qquad
+E(\tau) = \tfrac12 \sum_{u\in U} e_u(\tau)^2,\qquad
+e_u(\tau) = \begin{cases} d_u(\tau) - y_u(\tau) &amp; u \text{ has a target at } \tau\\ 0 &amp; \text{otherwise.}\end{cases}
+$$</div>
+
+			<p><strong>Backpropagation through time (BPTT)</strong> unrolls the network into a deep feed-forward net with one layer per time step and shared weights. The error signal $\vartheta_u(\tau)$ obeys the backward recursion</p>
+
+			<div class="_math-block">$$
+\vartheta_u(\tau) = \begin{cases}
+f_u'\big(z_u(\tau)\big)\, e_u(\tau) &amp; \tau = t,\\[4pt]
+f_u'\big(z_u(\tau)\big) \Big( e_u(\tau) + \sum_{k\in U} W_{[k,u]}\, \vartheta_k(\tau+1) \Big) &amp; t' \le \tau &lt; t,
+\end{cases}
+$$</div>
+
+			<p>and because weights are shared, their gradient is the sum over time:</p>
+
+			<div class="_math-block">$$
+\frac{\partial E_{\text{total}}}{\partial W_{[u,v]}} = -\sum_{\tau=t'}^{t} \vartheta_u(\tau)\, y_v(\tau-1).
+$$</div>
+
+			<p><strong>Real-time recurrent learning (RTRL)</strong> computes the same gradient forwards instead, by carrying sensitivities $p^k_{uv}(\tau) = \partial y_k(\tau)/\partial W_{[u,v]}$:</p>
+
+			<div class="_math-block">$$
+p^k_{uv}(\tau+1) = f_k'\big(z_k(\tau+1)\big)\Big[\delta_{uk}\, y_v(\tau) + \sum_{l\in U} W_{[k,l]}\, p^l_{uv}(\tau)\Big],\qquad p^k_{uv}(t')=0.
+$$</div>
+
+			<p>BPTT needs memory proportional to sequence length; RTRL needs no history but costs $O(n^4)$ per step for $n$ units. The original LSTM uses a hybrid of the two, as we will see.</p>
+
+			<h3 class="_secondary-title" id="s3">3. Why gradients vanish or explode</h3>
+
+			<p>Hochreiter's 1991 analysis asks: if an error appears at unit $u$ at time $t$, how much of it reaches unit $v$ at time $t-q$? Differentiating the recursion above gives</p>
+
+			<div class="_math-block">$$
+\frac{\partial \vartheta_v(t-q)}{\partial \vartheta_u(t)} =
+\begin{cases}
+f_v'\big(\text{net}_v(t-1)\big)\, w_{uv} &amp; q=1,\\[4pt]
+f_v'\big(\text{net}_v(t-q)\big) \displaystyle\sum_{l=1}^{n} \frac{\partial \vartheta_l(t-q+1)}{\partial \vartheta_u(t)}\, w_{lv} &amp; q&gt;1.
+\end{cases}
+$$</div>
+
+			<p>Unrolling this by induction, with $l_0 = u$ and $l_q = v$:</p>
+
+			<div class="_math-block">$$
+\boxed{\;
+\frac{\partial \vartheta_v(t-q)}{\partial \vartheta_u(t)} =
+\sum_{l_1=1}^{n}\cdots\sum_{l_{q-1}=1}^{n}\;\prod_{m=1}^{q} f'_{l_m}\big(\text{net}_{l_m}(t-m)\big)\, w_{l_m l_{m-1}}
+\;}
+$$</div>
+
+			<p>This is a sum of $n^{q-1}$ paths, each a product of $q$ factors of the form $f'\cdot w$. The consequence is immediate:</p>
+
+			<ul class="_list">
+				<li>If $|f'_{l_m} w_{l_m l_{m-1}}| &gt; 1$ for all $m$, the largest product grows like $c^q$. Errors explode and weights oscillate.</li>
+				<li>If $|f'_{l_m} w_{l_m l_{m-1}}| &lt; 1$ for all $m$, the product shrinks like $c^q$. Errors vanish and long-range learning stalls.</li>
+			</ul>
+
+			<h4 class="_tertiary-title">The sigmoid makes vanishing the default</h4>
+
+			<p>For the logistic sigmoid $\sigma(x) = 1/(1+e^{-x})$ we have $\sigma'(x) = \sigma(x)(1-\sigma(x)) \le \tfrac14$. So $|f' w| &lt; 1$ whenever $|w| &lt; 4$, which covers nearly every weight at initialisation. Making weights larger does not help: for fixed input $y$, $|\sigma'(wy)\,w| \to 0$ as $|w|\to\infty$, because the derivative decays exponentially while the weight grows only linearly. Raising the learning rate does not help either, since it scales long- and short-range gradients equally.</p>
+
+			<h4 class="_tertiary-title">A matrix bound</h4>
+
+			<p>In matrix form, with $F'(t-m)$ the diagonal matrix of derivatives, the path sum equals</p>
+
+			<div class="_math-block">$$
+(W_{u^T})^{\!T}\, F'(t-1) \prod_{m=2}^{q-1}\big(W F'(t-m)\big)\, W_v\, f_v'\big(\text{net}_v(t-q)\big).
+$$</div>
+
+			<p>Using the max-row-sum norm $\|W\|_A = \max_r \sum_s |w_{rs}|$ and $f'_{\max} = \max_m \|F'(t-m)\|_A = \tfrac14$, one obtains</p>
+
+			<div class="_math-block">$$
+\left|\frac{\partial \vartheta_v(t-q)}{\partial \vartheta_u(t)}\right| \le n\big(f'_{\max}\,\|W\|_A\big)^q .
+$$</div>
+
+			<p>If every $|w_{ij}| \le w_{\max} &lt; 4/n$, set $\rho = n w_{\max}/4 &lt; 1$ and the bound becomes $n\rho^q$: guaranteed exponential decay. Summing over all output units shows that global error flow vanishes too. The same conclusion was reached independently by Bengio, Simard and Frasconi (1994).</p>
+
+			<h3 class="_secondary-title" id="s4">4. The constant error carousel</h3>
+
+			<p>The analysis tells us exactly what to demand. Consider a single unit $j$ with a self-connection $w_{jj}$. Its local backflow is</p>
+
+			<div class="_math-block">$$
+\vartheta_j(t) = f_j'\big(\text{net}_j(t)\big)\, w_{jj}\, \vartheta_j(t+1).
+$$</div>
+
+			<p>For the error to neither shrink nor grow we need</p>
+
+			<div class="_math-block">$$
+f_j'\big(\text{net}_j(t)\big)\, w_{jj} = 1 .
+$$</div>
+
+			<p>Integrating this differential equation gives $f_j(\text{net}_j) = \text{net}_j / w_{jj}$, so $f_j$ must be linear, and the activation must stay constant:</p>
+
+			<div class="_math-block">$$
+y_j(t+1) = f_j\big(w_{jj}\, y_j(t)\big) = y_j(t).
+$$</div>
+
+			<p>The simplest choice is $f_j = \mathrm{id}$ and $w_{jj} = 1$. This linear, self-connected unit is the <strong>constant error carousel (CEC)</strong>, and it is the heart of LSTM: an error that enters it circulates unchanged for any number of steps.</p>
+
+			<div class="_note">
+				<span class="_note-label">Why the naive CEC is not enough</span>
+				<p>The unit is also connected to the rest of the network, and this creates two conflicts.</p>
+				<p><em>Input weight conflict.</em> A single incoming weight $w_{ji}$ must both write relevant inputs into $j$ and ignore irrelevant ones later. It receives contradictory updates.</p>
+				<p><em>Output weight conflict.</em> A single outgoing weight $w_{kj}$ must both read $j$'s content when useful and shield unit $k$ from it otherwise. Again, contradictory updates.</p>
+				<p>Both conflicts worsen as time lags grow, because stored information must be protected for longer. The remedy is to make reading and writing context-dependent.</p>
+			</div>
+
+			<h3 class="_secondary-title" id="s5">5. Gates: the 1997 memory cell</h3>
+
+			<p>LSTM wraps the CEC with two <strong>multiplicative gate units</strong>. An input gate $\text{in}_j$ decides when to write; an output gate $\text{out}_j$ decides when to read. The result is the memory cell $c_j$.</p>
+
+			<p>With all net inputs computed from the previous step's activations,</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+y^{\text{in}_j}(t) &amp;= f_{\text{in}_j}\Big(\sum_u w_{\text{in}_j u}\, y^u(t-1)\Big), &amp;
+y^{\text{out}_j}(t) &amp;= f_{\text{out}_j}\Big(\sum_u w_{\text{out}_j u}\, y^u(t-1)\Big),\\
+\text{net}_{c_j}(t) &amp;= \sum_u w_{c_j u}\, y^u(t-1), &amp; &amp;
+\end{aligned}
+$$</div>
+
+			<p>the cell updates its internal state and output as</p>
+
+			<div class="_math-block">$$
+\boxed{\;
+s_{c_j}(0)=0,\qquad
+s_{c_j}(t) = s_{c_j}(t-1) + y^{\text{in}_j}(t)\; g\big(\text{net}_{c_j}(t)\big),\qquad
+y^{c_j}(t) = y^{\text{out}_j}(t)\; h\big(s_{c_j}(t)\big).
+\;}
+$$</div>
+
+			<p>The self-connection has weight exactly $1$, so the CEC is intact. The squashing functions used in the paper are</p>
+
+			<div class="_math-block">$$
+f(x) = \frac{1}{1+e^{-x}}\in[0,1],\qquad
+g(x) = \frac{4}{1+e^{-x}} - 2\in[-2,2],\qquad
+h(x) = \frac{2}{1+e^{-x}} - 1\in[-1,1].
+$$</div>
+
+			<figure class="_figure">
+				<svg class="_diagram" viewBox="0 0 640 300" role="img" aria-label="Diagram of the 1997 LSTM memory cell">
+					<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+					<g fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--ink)">
+						<rect x="230" y="95" width="180" height="110" rx="55" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="6 4"/>
+						<line x1="40" y1="150" x2="95" y2="150" marker-end="url(#ar)"/>
+						<circle cx="120" cy="150" r="24"/>
+						<line x1="144" y1="150" x2="180" y2="150" marker-end="url(#ar)"/>
+						<circle cx="200" cy="150" r="18"/>
+						<line x1="218" y1="150" x2="258" y2="150" marker-end="url(#ar)"/>
+						<circle cx="278" cy="150" r="18"/>
+						<line x1="296" y1="150" x2="344" y2="150" marker-end="url(#ar)"/>
+						<circle cx="362" cy="150" r="16" fill="var(--paper)"/>
+						<path d="M362,134 C362,105 300,105 290,134" marker-end="url(#ar)" stroke="var(--accent)"/>
+						<line x1="378" y1="150" x2="420" y2="150" marker-end="url(#ar)"/>
+						<circle cx="444" cy="150" r="24"/>
+						<line x1="468" y1="150" x2="502" y2="150" marker-end="url(#ar)"/>
+						<circle cx="520" cy="150" r="18"/>
+						<line x1="538" y1="150" x2="600" y2="150" marker-end="url(#ar)"/>
+						<rect x="162" y="238" width="76" height="34"/>
+						<line x1="200" y1="238" x2="200" y2="170" marker-end="url(#ar)"/>
+						<rect x="482" y="238" width="76" height="34"/>
+						<line x1="520" y1="238" x2="520" y2="170" marker-end="url(#ar)"/>
+					</g>
+					<g font-family="JetBrains Mono, Menlo, Consolas, monospace" font-size="13" fill="var(--ink)" text-anchor="middle">
+						<text x="120" y="155">g</text>
+						<text x="200" y="155">×</text>
+						<text x="278" y="155">+</text>
+						<text x="362" y="155">s</text>
+						<text x="444" y="155">h</text>
+						<text x="520" y="155">×</text>
+						<text x="200" y="260">in gate</text>
+						<text x="520" y="260">out gate</text>
+						<text x="320" y="88" fill="var(--accent)">weight 1.0</text>
+						<text x="320" y="228" fill="var(--accent)">constant error carousel</text>
+						<text x="52" y="138">net_c</text>
+						<text x="590" y="138">y_c</text>
+					</g>
+				</svg>
+				<figcaption>The original memory cell. The input gate scales what is written into the linear self-loop; the output gate scales what is read out. There is no forget gate yet.</figcaption>
+			</figure>
+
+			<p>A <strong>memory cell block</strong> of size $S$ is a group of $S$ cells sharing one input gate and one output gate. It stores distributed information at the cost of only two gate units.</p>
+
+			<div class="_note">
+				<span class="_note-label">How gates resolve the conflicts</span>
+				<p>The input gate controls error flow into the cell's input weights $w_{c_j i}$, so writing happens only when $y^{\text{in}_j}\approx 1$. The output gate controls error flow out of the cell, so the cell disturbs the rest of the network only when $y^{\text{out}_j}\approx 1$. Errors trapped inside the CEC cannot change; the gates learn which errors to let in and when to release them.</p>
+			</div>
+
+			<h3 class="_secondary-title" id="s6">6. Truncated learning and exact error flow</h3>
+
+			<p>The 1997 algorithm deliberately cuts gradient paths that leave a cell. It sets</p>
+
+			<div class="_math-block">$$
+\frac{\partial\, \text{net}_{\text{in}_j}(t)}{\partial y^u(t-1)} \approx_{tr} 0,\qquad
+\frac{\partial\, \text{net}_{\text{out}_j}(t)}{\partial y^u(t-1)} \approx_{tr} 0,\qquad
+\frac{\partial\, \text{net}_{c_j}(t)}{\partial y^u(t-1)} \approx_{tr} 0 .
+$$</div>
+
+			<p>Errors may still change the incoming weights, but they are not propagated further back through those connections. Only inside the cell do errors travel back through previous states. The immediate consequence is</p>
+
+			<div class="_math-block">$$
+\frac{\partial s_{c_j}(t-k)}{\partial s_{c_j}(t-k-1)} \approx_{tr} 1,
+\qquad\text{hence}\qquad
+\frac{\partial \vartheta_{s_{c_j}}(t)}{\partial \vartheta_{s_{c_j}}(t+1)} \approx_{tr} 1 .
+$$</div>
+
+			<p>Now trace an error $\vartheta_j(t)$ that arrives at the cell output and flows back $q$ steps to the cell input or the input gate:</p>
+
+			<div class="_math-block">$$
+\frac{\partial \vartheta_v(t-q)}{\partial \vartheta_j(t)} \approx_{tr}
+y^{\text{out}_j}(t)\, h'\big(s_{c_j}(t)\big)\cdot
+\begin{cases}
+g'\big(\text{net}_{c_j}(t-q)\big)\, y^{\text{in}_j}(t-q) &amp; v = c_j,\\[3pt]
+g\big(\text{net}_{c_j}(t-q)\big)\, f'_{\text{in}_j}\big(\text{net}_{\text{in}_j}(t-q)\big) &amp; v = \text{in}_j.
+\end{cases}
+$$</div>
+
+			<div class="_note">
+				<span class="_note-label">The key observation</span>
+				<p>The error is scaled only at the moment it enters the cell (time $t$) and the moment it leaves (time $t-q$). Nothing in between depends on $q$. Compare this with the $q$-fold product in Section 3.</p>
+			</div>
+
+			<h4 class="_tertiary-title">Learning rules of the truncated algorithm</h4>
+
+			<p>With squared error $E(t) = \sum_k (t^k(t) - y^k(t))^2$ and unit error $e_l(t) = -\partial E(t)/\partial\,\text{net}_l(t)$, the updates for output units, hidden units and output gates are ordinary backpropagation:</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+e_k(t) &amp;= f_k'\big(\text{net}_k(t)\big)\big(t^k(t) - y^k(t)\big),\\
+e_i(t) &amp;= f_i'\big(\text{net}_i(t)\big)\sum_k w_{ki}\, e_k(t),\\
+e_{\text{out}_j}(t) &amp;= f'_{\text{out}_j}\big(\text{net}_{\text{out}_j}(t)\big)\sum_{v=1}^{S_j} h\big(s_{c_j^v}(t)\big)\sum_k w_{k c_j^v}\, e_k(t),\\
+\Delta w_{lm}(t) &amp;= \alpha\, e_l(t)\, y^m(t-1).
+\end{aligned}
+$$</div>
+
+			<p>Input gates and cell inputs use an RTRL-style forward recursion. Define the internal-state error</p>
+
+			<div class="_math-block">$$
+e_{s_{c_j^v}}(t) = f_{\text{out}_j}\big(\text{net}_{\text{out}_j}(t)\big)\, h'\big(s_{c_j^v}(t)\big)\sum_k w_{k c_j^v}\, e_k(t)
+$$</div>
+
+			<p>and carry the derivatives of the state forward in time:</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+\frac{\partial s_{c_j^v}(t)}{\partial w_{\text{in}_j m}} &amp;= \frac{\partial s_{c_j^v}(t-1)}{\partial w_{\text{in}_j m}} + g\big(\text{net}_{c_j^v}(t)\big)\, f'_{\text{in}_j}\big(\text{net}_{\text{in}_j}(t)\big)\, y^m(t-1),\\
+\frac{\partial s_{c_j^v}(t)}{\partial w_{c_j^v m}} &amp;= \frac{\partial s_{c_j^v}(t-1)}{\partial w_{c_j^v m}} + g'\big(\text{net}_{c_j^v}(t)\big)\, f_{\text{in}_j}\big(\text{net}_{\text{in}_j}(t)\big)\, y^m(t-1).
+\end{aligned}
+$$</div>
+
+			<p>The weight updates are then $\Delta w_{\text{in}_j m}(t) = \alpha \sum_v e_{s_{c_j^v}}(t)\, \partial s_{c_j^v}(t)/\partial w_{\text{in}_j m}$ and $\Delta w_{c_j^v m}(t) = \alpha\, e_{s_{c_j^v}}(t)\, \partial s_{c_j^v}(t)/\partial w_{c_j^v m}$. Only these state derivatives need storing, so the algorithm is local in both space and time.</p>
+
+			<h4 class="_tertiary-title">Two practical problems and their fixes</h4>
+
+			<p><em>Abuse.</em> Early in training the network can reduce error without memory, and may misuse cells as constant bias units. Fixes: add cells only when error stops falling, or give output gates negative initial biases (e.g. $-1, -2, -3$) so cells are "allocated" one at a time.</p>
+
+			<p><em>Internal state drift.</em> If a cell's inputs are mostly of one sign, $s_{c_j}$ drifts, $h'(s_{c_j})\to 0$, and the gradient vanishes at the exit point. Fix: bias input gates negatively at initialisation (e.g. $-3, -6$).</p>
+
+			<h3 class="_secondary-title" id="s7">7. Forget gates (Gers et al., 2000)</h3>
+
+			<p>A fixed self-weight of $1$ has a flaw on continuous input streams: nothing ever resets the state. $s_{c}$ grows without bound, $h$ saturates, and the cell degenerates into an ordinary unit. Gers, Schmidhuber and Cummins replaced the constant $1$ with a learned <strong>forget gate</strong> $y^{\varphi}$:</p>
+
+			<div class="_math-block">$$
+y^{\varphi_m}(\tau+1) = f\big(z_{\varphi_m}(\tau+1) + b_{\varphi_m}\big),\qquad
+s_{m_c}(\tau+1) = s_{m_c}(\tau)\, y^{\varphi_m}(\tau+1) + y^{\text{in}_m}(\tau+1)\, g\big(z_{m_c}(\tau+1)\big).
+$$</div>
+
+			<p>The error through the carousel is now scaled by the forget gate each step, $\partial s(\tau+1)/\partial s(\tau) = y^{\varphi}(\tau+1)$. This is no longer exactly $1$, but it is a <em>learned, input-dependent</em> factor that the network can hold near $1$ for as long as it needs to remember and drop to $0$ when it wants to reset. The truncated state derivative for forget-gate weights is</p>
+
+			<div class="_math-block">$$
+\frac{\partial s_{m_c}(\tau+1)}{\partial W_{[\varphi_m,v]}} = \frac{\partial s_{m_c}(\tau)}{\partial W_{[\varphi_m,v]}}\, y^{\varphi_m}(\tau+1) + s_{m_c}(\tau)\, f'_{\varphi_m}\big(z_{\varphi_m}(\tau+1)\big)\, y_v(\tau).
+$$</div>
+
+			<div class="_note">
+				<span class="_note-label">Initialise the forget bias to 1</span>
+				<p>With $b_\varphi$ around $1$ the gate starts near $\sigma(1)\approx 0.73$ or higher, so the cell remembers before it has learned what to forget. Jozefowicz et al. (2015) found this single change closes much of the gap between LSTM and GRU.</p>
+			</div>
+
+			<h3 class="_secondary-title" id="s8">8. The modern LSTM in vector form</h3>
+
+			<p>Today's standard cell (as in PyTorch and TensorFlow) is the forget-gate LSTM with full backpropagation through time, $g=\tanh$, $h=\tanh$, and all four transforms computed from $[h_{t-1}, x_t]$. With hidden size $n$ and input size $d$:</p>
+
+			<div class="_math-block">$$
+\boxed{\;
+\begin{aligned}
+f_t &amp;= \sigma\big(W_f\,[h_{t-1}, x_t] + b_f\big) &amp;&amp;\text{forget gate}\\
+i_t &amp;= \sigma\big(W_i\,[h_{t-1}, x_t] + b_i\big) &amp;&amp;\text{input gate}\\
+o_t &amp;= \sigma\big(W_o\,[h_{t-1}, x_t] + b_o\big) &amp;&amp;\text{output gate}\\
+\tilde c_t &amp;= \tanh\big(W_c\,[h_{t-1}, x_t] + b_c\big) &amp;&amp;\text{candidate}\\
+c_t &amp;= f_t \odot c_{t-1} + i_t \odot \tilde c_t &amp;&amp;\text{cell state}\\
+h_t &amp;= o_t \odot \tanh(c_t) &amp;&amp;\text{hidden state}
+\end{aligned}
+\;}
+$$</div>
+
+			<p>Here $W_\ast \in \mathbb{R}^{n\times(n+d)}$, $b_\ast\in\mathbb{R}^n$, and $\odot$ is the element-wise product. The dictionary to the notation above is: $c_t \leftrightarrow s_c$, $\tilde c_t \leftrightarrow g(\text{net}_c)$, $i_t \leftrightarrow y^{\text{in}}$, $o_t\leftrightarrow y^{\text{out}}$, $f_t\leftrightarrow y^{\varphi}$, $h_t \leftrightarrow y^{c}$.</p>
+
+			<p>Two structural facts carry the whole design:</p>
+
+			<ol class="_list">
+				<li>The cell update is <em>additive</em>. New information is added to $c_{t-1}$ rather than pushed through a matrix and a squashing function.</li>
+				<li>The direct Jacobian of the cell path is diagonal: $\dfrac{\partial c_t}{\partial c_{t-1}}\Big|_{\text{direct}} = \operatorname{diag}(f_t)$. Across $q$ steps this gives $\prod_{k=1}^{q}\operatorname{diag}(f_{t-k+1})$, with no weight matrices and no $\sigma'\le\tfrac14$ factors.</li>
+			</ol>
+
+			<p>Some variants add <em>peephole</em> connections, letting gates see $c_{t-1}$ (or $c_t$ for the output gate), e.g. $f_t = \sigma(W_f[h_{t-1},x_t] + p_f\odot c_{t-1} + b_f)$. Gers et al. (2002) used these for precise timing tasks.</p>
+
+			<h3 class="_secondary-title" id="s9">9. Backpropagation through the modern cell</h3>
+
+			<p>Let $\delta h_t = \partial L/\partial h_t$ (loss gradient at step $t$ plus the gradient arriving from step $t+1$) and $\delta c_{t+1}$ be the gradient flowing back into the cell state from the future. Write $z_f, z_i, z_o, z_c$ for the pre-activations. Applying the chain rule to each line of the forward pass:</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+\delta c_t &amp;= \delta h_t \odot o_t \odot \big(1-\tanh^2 c_t\big) \;+\; \delta c_{t+1}\odot f_{t+1},\\[3pt]
+\delta z_o &amp;= \delta h_t \odot \tanh(c_t)\odot o_t\odot(1-o_t),\\
+\delta z_f &amp;= \delta c_t \odot c_{t-1}\odot f_t\odot(1-f_t),\\
+\delta z_i &amp;= \delta c_t \odot \tilde c_t\odot i_t\odot(1-i_t),\\
+\delta z_c &amp;= \delta c_t \odot i_t\odot\big(1-\tilde c_t^{\,2}\big).
+\end{aligned}
+$$</div>
+
+			<p>Stacking $\delta z_t = [\delta z_f;\delta z_i;\delta z_o;\delta z_c]$ and $W = [W_f;W_i;W_o;W_c]$, with $v_t = [h_{t-1},x_t]$:</p>
+
+			<div class="_math-block">$$
+\frac{\partial L}{\partial W} = \sum_t \delta z_t\, v_t^{\!\top},\qquad
+\frac{\partial L}{\partial b} = \sum_t \delta z_t,\qquad
+\big[\delta h_{t-1}^{\text{rec}};\ \delta x_t\big] = W^{\!\top}\delta z_t,\qquad
+\delta c_{t-1} \mathrel{+}= \delta c_t\odot f_t .
+$$</div>
+
+			<h4 class="_tertiary-title">Where the long-range gradient lives</h4>
+
+			<p>Ignoring the paths through the gates, the gradient from $c_t$ back to $c_{t-q}$ is</p>
+
+			<div class="_math-block">$$
+\frac{\partial c_t}{\partial c_{t-q}} \approx \prod_{k=0}^{q-1} \operatorname{diag}\big(f_{t-k}\big)
+\quad\Longrightarrow\quad
+\Big|\frac{\partial c_{t,r}}{\partial c_{t-q,r}}\Big| \approx \prod_{k=0}^{q-1} f_{t-k,r}.
+$$</div>
+
+			<p>With $f\equiv 1$ this is exactly the CEC. With $f = 0.99$ the signal after $100$ steps is still $0.99^{100}\approx 0.37$, while a plain RNN with factor $0.9$ retains $0.9^{100}\approx 2.7\times10^{-5}$. The chart at the top plots precisely this comparison. The full Jacobian also contains terms through $h_{t-1}$ and the gates; those behave like an ordinary RNN and do decay, which is why modern LSTMs are usually trained with gradient clipping.</p>
+
+			<h3 class="_secondary-title" id="s10">10. A worked scalar example</h3>
+
+			<p>Take $n=1$, $c_{t-1}=0.5$, and suppose the pre-activations come out as $z_f=1$, $z_i=0$, $z_o=2$, $z_c=1$.</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead><tr><th>Quantity</th><th>Computation</th><th>Value</th></tr></thead>
+					<tbody>
+						<tr><td>$f_t$</td><td>$\sigma(1)$</td><td>0.7311</td></tr>
+						<tr><td>$i_t$</td><td>$\sigma(0)$</td><td>0.5000</td></tr>
+						<tr><td>$o_t$</td><td>$\sigma(2)$</td><td>0.8808</td></tr>
+						<tr><td>$\tilde c_t$</td><td>$\tanh(1)$</td><td>0.7616</td></tr>
+						<tr><td>$c_t$</td><td>$0.7311\cdot0.5 + 0.5\cdot0.7616$</td><td>0.7463</td></tr>
+						<tr><td>$h_t$</td><td>$0.8808\cdot\tanh(0.7463)$</td><td>0.5575</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p>Now backpropagate $\delta h_t = 1$ with $\delta c_{t+1}=0$:</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead><tr><th>Gradient</th><th>Computation</th><th>Value</th></tr></thead>
+					<tbody>
+						<tr><td>$\delta c_t$</td><td>$1\cdot 0.8808\cdot(1-0.6330^2)$</td><td>0.5279</td></tr>
+						<tr><td>$\delta z_o$</td><td>$0.6330\cdot 0.8808\cdot 0.1192$</td><td>0.0665</td></tr>
+						<tr><td>$\delta z_f$</td><td>$0.5279\cdot 0.5\cdot 0.7311\cdot 0.2689$</td><td>0.0519</td></tr>
+						<tr><td>$\delta z_i$</td><td>$0.5279\cdot 0.7616\cdot 0.25$</td><td>0.1005</td></tr>
+						<tr><td>$\delta z_c$</td><td>$0.5279\cdot 0.5\cdot(1-0.7616^2)$</td><td>0.1109</td></tr>
+						<tr><td>$\delta c_{t-1}$</td><td>$0.5279\cdot 0.7311$</td><td>0.3859</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p>Notice that $\delta c_{t-1}$ is simply $\delta c_t$ times the forget gate. No weight and no sigmoid derivative appears on that path.</p>
+
+			<h3 class="_secondary-title" id="s11">11. A reference implementation</h3>
+
+			<p>The NumPy code below implements Sections 8 and 9 directly. It passes a finite-difference gradient check with relative error around $4\times10^{-10}$.</p>
+
+<pre><code>import numpy as np
+
+def sigmoid(z):
+    return 1.0 / (1.0 + np.exp(-z))
+
+def lstm_forward(X, h0, c0, W, b):
+    """X: (T, d); W: (4n, n+d); b: (4n,). Gate order: f, i, o, g."""
+    n = h0.shape[0]
+    h, c, cache, H = h0, c0, [], []
+    for x in X:
+        v = np.concatenate([h, x])
+        z = W @ v + b
+        f, i, o = sigmoid(z[:n]), sigmoid(z[n:2*n]), sigmoid(z[2*n:3*n])
+        g = np.tanh(z[3*n:])
+        c_new = f * c + i * g
+        tc = np.tanh(c_new)
+        h_new = o * tc
+        cache.append((v, c, f, i, o, g, tc))
+        h, c = h_new, c_new
+        H.append(h)
+    return np.array(H), cache
+
+def lstm_backward(dH, cache, W):
+    """dH: (T, n) = dL/dh_t from the loss at each step."""
+    n = dH.shape[1]
+    dW, db = np.zeros_like(W), np.zeros(W.shape[0])
+    dh_next, dc_next = np.zeros(n), np.zeros(n)
+    for t in reversed(range(len(cache))):
+        v, c_prev, f, i, o, g, tc = cache[t]
+        dh = dH[t] + dh_next
+        dc = dh * o * (1 - tc**2) + dc_next
+        dz = np.concatenate([
+            dc * c_prev * f * (1 - f),   # forget gate
+            dc * g * i * (1 - i),        # input gate
+            dh * tc * o * (1 - o),       # output gate
+            dc * i * (1 - g**2),         # candidate
+        ])
+        dW += np.outer(dz, v)
+        db += dz
+        dh_next = (W.T @ dz)[:n]
+        dc_next = dc * f                 # the carousel
+    return dW, db</code></pre>
+
+			<h3 class="_secondary-title" id="s12">12. Cost, and the family of variants</h3>
+
+			<h4 class="_tertiary-title">Parameters and complexity</h4>
+
+			<p>A modern LSTM layer has four weight matrices and four bias vectors:</p>
+
+			<div class="_math-block">$$
+\#\text{params} = 4\big(n(n+d) + n\big).
+$$</div>
+
+			<p>For $n=128$, $d=10$ that is $4(128\cdot138+128) = 71{,}168$. For the original architecture, Hochreiter and Schmidhuber show the per-step update cost is</p>
+
+			<div class="_math-block">$$
+O(KH + KCS + HI + CSI) = O(W),
+$$</div>
+
+			<p>where $K$ is the number of outputs, $C$ the number of blocks of size $S$, $H$ conventional hidden units, $I$ the fan-in, and $W$ the number of weights. That is $O(1)$ per weight and time step, the same as BPTT, but without storing the activation history: only the $2CSI$ state derivatives $\partial s/\partial w$ are kept.</p>
+
+			<h4 class="_tertiary-title">Gated recurrent unit (GRU)</h4>
+
+			<p>Cho et al. (2014) merged the cell and hidden state and used two gates:</p>
+
+			<div class="_math-block">$$
+\begin{aligned}
+r_t &amp;= \sigma(W_r[h_{t-1},x_t] + b_r), \qquad u_t = \sigma(W_u[h_{t-1},x_t] + b_u),\\
+\tilde h_t &amp;= \tanh\big(W_x x_t + r_t\odot (W_h h_{t-1}) + b\big),\\
+h_t &amp;= u_t\odot h_{t-1} + (1-u_t)\odot \tilde h_t .
+\end{aligned}
+$$</div>
+
+			<p>Comparing with $c_t = f_t\odot c_{t-1} + i_t\odot\tilde c_t$: the update gate $u_t$ plays the forget gate, and $1-u_t$ plays the input gate, coupling the two. GRU has three weight blocks instead of four and no output gate.</p>
+
+			<h4 class="_tertiary-title">Architectural extensions</h4>
+
+			<ul class="_list">
+				<li><strong>Bidirectional LSTM</strong> runs one LSTM forwards and one backwards over the sequence and feeds both to the output layer, so each prediction sees past and future context. Combined with the CTC loss (Graves et al., 2006) it handles unsegmented sequences such as speech and handwriting.</li>
+				<li><strong>Stacked LSTM</strong> feeds layer $\ell-1$'s hidden state as layer $\ell$'s input: $X_\ell = [h^{(\ell-1)}_t;\ h^{(\ell)}_{t-1}]$.</li>
+				<li><strong>Multidimensional LSTM</strong> handles grid-structured data by giving each cell $N$ predecessors and $N$ forget gates: $s = \sum_{i=1}^N \varphi_i\odot s_i + \text{in}\odot z$.</li>
+				<li><strong>Grid LSTM</strong> (Kalchbrenner et al., 2016) applies a separate LSTM transform along each of $N$ dimensions, including depth, sharing the concatenated hidden vector but keeping distinct memory vectors per dimension. This avoids the instability of large multidimensional LSTMs.</li>
+				<li><strong>Sequence-to-sequence and attention.</strong> An encoder LSTM reads the input and a decoder LSTM generates the output (Sutskever et al., 2014); attention (Bahdanau et al., 2015) lets the decoder look back at all encoder states rather than a single fixed vector.</li>
+			</ul>
+
+			<h3 class="_secondary-title" id="s13">13. What the 1997 experiments showed</h3>
+
+			<p>Every task except the first was built so that no short-lag training examples exist, and most were too hard for random weight guessing.</p>
+
+			<div class="_table-wrap">
+				<table>
+					<thead><tr><th>Task</th><th>What it tests</th><th>Result</th></tr></thead>
+					<tbody>
+						<tr><td>Embedded Reber grammar</td><td>Standard benchmark, short lags</td><td>LSTM solved it in nearly all 150 trials; RTRL, Elman nets and RCC succeeded rarely or never, and more slowly</td></tr>
+						<tr><td>Long-lag sequences (2a&ndash;2c)</td><td>Remember one symbol for up to 1,000 steps among distractors</td><td>LSTM always succeeded; RTRL and BPTT already failed at 10-step lags</td></tr>
+						<tr><td>Two-sequence problem (3a&ndash;3c)</td><td>Noise and signal on one channel, noisy real-valued targets</td><td>Solved, including the version guessing cannot crack</td></tr>
+						<tr><td>Adding problem (4)</td><td>Store two real numbers for up to 500 steps and sum them</td><td>At most 3 of 2,560 test sequences wrong</td></tr>
+						<tr><td>Multiplication problem (5)</td><td>Non-additive combination of stored values</td><td>Solved, showing LSTM is not limited to integration</td></tr>
+						<tr><td>Temporal order (6a, 6b)</td><td>Classify by the order of widely separated symbols</td><td>At most 3 of 2,560 wrong</td></tr>
+					</tbody>
+				</table>
+			</div>
+
+			<p>One scaling result stands out: when the number of distractor symbols grows in proportion to the time lag, training time grows very slowly, from 30,000 sequences at lag 50 to 49,000 at lag 1,000.</p>
+
+			<h3 class="_secondary-title" id="s14">14. Limitations</h3>
+
+			<ul class="_list">
+				<li><strong>Non-decomposable tasks.</strong> Truncated LSTM struggles with strongly delayed XOR, where storing only one of the two inputs does not reduce error at all.</li>
+				<li><strong>Precise counting.</strong> Distinguishing whether a signal occurred 99 or 100 steps ago needs an extra mechanism; peephole connections help.</li>
+				<li><strong>Fixed capacity.</strong> The number of memory blocks is set in advance, so memory is bounded, and simply enlarging the network does not reliably fix that.</li>
+				<li><strong>Parameter cost.</strong> Each block adds gate units; in the fully connected case the weight count can rise by up to a factor of 9 relative to a plain RNN of the same hidden size.</li>
+				<li><strong>Sequential computation.</strong> The recurrence $c_t = f(c_{t-1}, \dots)$ cannot be parallelised across time, which is one reason attention-only models later displaced LSTMs for large-scale language tasks.</li>
+			</ul>
+
+			<div class="_note">
+				<span class="_note-label">The whole idea in one line</span>
+				<p>Plain RNNs multiply the error by $f'w$ every step, so it decays like $c^q$. LSTM routes memory through an additive path whose per-step factor is exactly $1$ (1997) or a learned gate near $1$ (2000 onward), and uses multiplicative gates to decide what enters, what leaves and what is forgotten.</p>
+			</div>
+
+			<div class="_note">
+				<span class="_note-label">A note on sources</span>
+				<p>The tutorial by Staudemeyer and Rothstein Morris prints the sigmoid threshold unit as $1/(1-e^{-l s})$; the correct form is $1/(1+e^{-l s})$. This page uses the correct sign throughout.</p>
+			</div>
+
+			<h4 class="_tertiary-title" id="references">References</h4>
+
+			<ol class="_list">
+				<li>S. Hochreiter and J. Schmidhuber. <em>Long Short-Term Memory</em>. Neural Computation 9(8):1735&ndash;1780, 1997.</li>
+				<li>R. C. Staudemeyer and E. Rothstein Morris. <em>Understanding LSTM: a tutorial into Long Short-Term Memory Recurrent Neural Networks</em>. arXiv:1909.09586, 2019.</li>
+				<li>S. Hochreiter. <em>Untersuchungen zu dynamischen neuronalen Netzen</em>. Diploma thesis, TU M&uuml;nchen, 1991.</li>
+				<li>Y. Bengio, P. Simard, P. Frasconi. <em>Learning long-term dependencies with gradient descent is difficult</em>. IEEE Transactions on Neural Networks 5(2), 1994.</li>
+				<li>F. A. Gers, J. Schmidhuber, F. Cummins. <em>Learning to forget: continual prediction with LSTM</em>. Neural Computation 12(10), 2000.</li>
+				<li>F. A. Gers, N. Schraudolph, J. Schmidhuber. <em>Learning precise timing with LSTM recurrent networks</em>. JMLR 3, 2002.</li>
+				<li>A. Graves et al. <em>Connectionist temporal classification</em>. ICML, 2006.</li>
+				<li>K. Cho et al. <em>Learning phrase representations using RNN encoder&ndash;decoder</em>. EMNLP, 2014.</li>
+				<li>R. Jozefowicz, W. Zaremba, I. Sutskever. <em>An empirical exploration of recurrent network architectures</em>. ICML, 2015.</li>
+				<li>N. Kalchbrenner, I. Danihelka, A. Graves. <em>Grid Long Short-Term Memory</em>. ICLR, 2016.</li>
+			</ol>
+
+			<nav class="_bottom-navigation" aria-label="bottom-navigation">
+				<ul>
+					<li><a href="../index.html">Home</a></li>
+					<span aria-hidden="true">-</span>
+					<li><a href="../posts.html">Posts</a></li>
+				</ul>
+			</nav>
+		</section>
+
+		<div id="notice">
+			Repository: <a href="https://github.com/abhinaash-broski/Portfolio" target="_blank">https://github.com/abhinaash-broski/Portfolio</a>
+		</div>
+	</main>
+
+	<footer>
+		<p class="__footer-copyright">&copy; Copyrights, Abhinaash Tiwari</p>
+	</footer>
+
+	<script>
+		(function () {
+			const svg = document.getElementById('flow');
+			const a = document.getElementById('a'), f = document.getElementById('f');
+			const aOut = document.getElementById('aOut'), fOut = document.getElementById('fOut');
+			const readout = document.getElementById('readout');
+			const W = 640, H = 260, L = 56, R = 16, T = 16, B = 40, Q = 200, YMIN = -12;
+			const x = q => L + (q / Q) * (W - L - R);
+			const y = lg => T + (0 - Math.max(lg, YMIN)) / (0 - YMIN) * (H - T - B);
+			const muted = 'rgba(30, 29, 27, 0.55)';
+			function path(factor) {
+				let d = '';
+				for (let q = 0; q <= Q; q += 2) {
+					const lg = q * Math.log10(factor);
+					d += (q ? 'L' : 'M') + x(q).toFixed(1) + ',' + y(Math.min(lg, 2)).toFixed(1);
+				}
+				return d;
+			}
+			function draw() {
+				const av = parseFloat(a.value), fv = parseFloat(f.value);
+				aOut.textContent = av.toFixed(2); fOut.textContent = fv.toFixed(3);
+				let g = '';
+				for (let e = 0; e >= YMIN; e -= 3) {
+					g += `<line x1="${L}" x2="${W - R}" y1="${y(e)}" y2="${y(e)}" stroke="var(--rule-color)"/>`;
+					g += `<text x="${L - 8}" y="${y(e) + 4}" text-anchor="end" font-size="11" fill="${muted}">1e${e}</text>`;
+				}
+				for (let q = 0; q <= Q; q += 50) {
+					g += `<text x="${x(q)}" y="${H - B + 18}" text-anchor="middle" font-size="11" fill="${muted}">${q}</text>`;
+				}
+				g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle" font-size="11" fill="${muted}">steps back in time, q</text>`;
+				g += `<path d="${path(av)}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`;
+				g += `<path d="${path(fv)}" fill="none" stroke="var(--ink)" stroke-width="2.5"/>`;
+				svg.innerHTML = g;
+				readout.textContent = `RNN ${Math.pow(av, 100).toExponential(1)}, LSTM ${Math.pow(fv, 100).toExponential(1)}`;
+			}
+			a.addEventListener('input', draw); f.addEventListener('input', draw);
+			draw();
+		})();
+	</script>
+</body>
+</html>

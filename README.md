@@ -14,6 +14,7 @@ The design is a minimal "notebook" theme: a cream page on a dotted desk backgrou
 
 | Post | File |
 |---|---|
+| Long Short-Term Memory, from First Principles | `posts/lstm.html` |
 | Singular Value Decomposition: Finding the Hidden Geometry Inside a Matrix | `posts/svd.html` |
 | Convolution: The Mathematics Behind Sliding, Smoothing, and Pattern Matching | `posts/convolution.html` |
 | Geometric Deep Learning, Explained: Why Symmetry Is the Real Architecture | `posts/geometric-deep-learning.html` |
@@ -27,15 +28,13 @@ The design is a minimal "notebook" theme: a cream page on a dotted desk backgrou
 ├── posts.html                  Full post index
 ├── resume.html                 Academic CV
 ├── posts/
-│   ├── <post>.html             One file per blog post
-│   └── example-post.html       Template post (placeholder content)
+│   └── <post>.html             One file per blog post
 ├── assets/
 │   ├── css/
 │   │   ├── style.css           Global theme: colours, fonts, layout, header, footer
-│   │   ├── post.css            Shared styles for long-form posts (TOC, math, tables, notes)
+│   │   ├── post.css            Shared styles for long-form posts (TOC, math, tables, notes, code, figures)
 │   │   ├── article.css         Post cards on the home and posts pages
-│   │   ├── about.css           About page
-│   │   └── example-post.css    Template post
+│   │   └── about.css           About page
 │   └── images/
 │       └── profile.png
 └── CNAME                       Custom domain for GitHub Pages

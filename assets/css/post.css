@@ -122,6 +122,99 @@ td {
 	vertical-align: top;
 }
 
+/* Code */
+
+pre {
+	font-family: var(--font-mono);
+	font-size: 0.82em;
+	line-height: 1.55;
+	background: rgba(30, 29, 27, 0.04);
+	border: var(--border-shorthand);
+	border-radius: 0.25rem;
+	padding: 1rem 1.1rem;
+	margin-block: 1.4em;
+	overflow-x: auto;
+}
+
+code {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+}
+
+pre code {
+	font-size: inherit;
+}
+
+/* Figures */
+
+._figure {
+	margin-block: 2em;
+}
+
+._figure figcaption {
+	font-size: 0.92em;
+	color: rgba(30, 29, 27, 0.6);
+	margin-block-start: 0.6em;
+}
+
+._figure-label {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	letter-spacing: 0.04em;
+}
+
+._diagram {
+	width: 100%;
+	height: auto;
+	max-width: 40rem;
+	display: block;
+	margin-inline: auto;
+}
+
+._chart {
+	width: 100%;
+	height: auto;
+	display: block;
+	border: var(--border-shorthand);
+	border-radius: 0.25rem;
+	font-family: var(--font-mono);
+}
+
+._lab {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem 2.5rem;
+	margin-block-end: 1em;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+}
+
+._lab label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	flex: 1;
+	min-width: 14rem;
+}
+
+._lab output {
+	font-weight: 600;
+	color: var(--accent);
+}
+
+input[type=range] {
+	accent-color: var(--accent);
+	width: 100%;
+}
+
+._swatch {
+	display: inline-block;
+	width: 1rem;
+	height: 0.1875rem;
+	vertical-align: middle;
+	margin: 0 0.35rem 0 0.9rem;
+}
+
 /* Lists */
 
 ._list {
