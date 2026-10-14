@@ -1,0 +1,164 @@
+.__resume {
+	max-width: 52rem;
+}
+
+/* Name block. Overrides the site header styles, since this is a nested <header>. */
+
+._resume-head {
+	display: block;
+	margin: 0;
+	padding: 0 0 2rem;
+	border-block-end: var(--border-shorthand);
+}
+
+._resume-head h2 {
+	margin: 0 0 0.25em;
+	font-size: 2rem;
+}
+
+._resume-tagline {
+	margin: 0 0 0.9em;
+	font-style: italic;
+}
+
+._resume-contact {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1.6rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	letter-spacing: 0.03em;
+}
+
+._resume-contact a {
+	text-decoration: none;
+	border-block-end: var(--border-shorthand);
+	padding-block-end: 0;
+}
+
+/* Sections */
+
+._resume-section {
+	padding-block: 0.4rem 0.6rem;
+	border-block-end: var(--border-shorthand);
+}
+
+._resume-section:last-child {
+	border-block-end: none;
+}
+
+._resume-section h3 {
+	margin-block: 1.8rem 1.2rem;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--accent);
+}
+
+/* Entries */
+
+._entry {
+	margin-block-end: 1.5rem;
+}
+
+._entry-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 1.5rem;
+}
+
+._entry-head h4 {
+	margin: 0;
+	font-size: 1em;
+	font-weight: 600;
+}
+
+._entry-date {
+	flex: none;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	color: rgba(30, 29, 27, 0.6);
+	white-space: nowrap;
+}
+
+._entry-meta {
+	margin: 0.15em 0 0;
+}
+
+._entry-link {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	text-decoration: none;
+	border-block-end: var(--border-shorthand);
+}
+
+@media (hover: hover) {
+	._entry-link:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+}
+
+._entry ul {
+	margin: 0.5em 0 0;
+	padding-inline-start: 1.2em;
+}
+
+._entry li + li {
+	margin-block-start: 0.35em;
+}
+
+/* Label / value pairs (thesis details, skills) */
+
+._entry-details,
+._skills {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 0.3rem 1.25rem;
+	margin: 0.5em 0 0;
+}
+
+._entry-details dt,
+._skills dt {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	line-height: 2.2;
+	color: rgba(30, 29, 27, 0.6);
+}
+
+._entry-details dd,
+._skills dd {
+	margin: 0;
+}
+
+._reference {
+	margin-block-start: 0;
+}
+
+@media (max-width: 36rem) {
+	._entry-head {
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+
+	._entry-details,
+	._skills {
+		grid-template-columns: 1fr;
+		gap: 0;
+	}
+
+	._entry-details dd,
+	._skills dd {
+		margin-block-end: 0.5rem;
+	}
+}

@@ -1,10 +1,83 @@
-.__about-me-section {
-	text-align: justify;
+/* Intro: portrait beside name, role and links */
+
+.__about-intro {
+	display: flex;
+	align-items: center;
+	gap: 2.5rem;
+	padding-block-end: 2.5rem;
+	border-block-end: var(--border-shorthand);
 }
 
 ._profile-picture {
+	flex: none;
+	width: 10rem;
+	aspect-ratio: 1 / 1;
+	object-fit: cover;
 	border-radius: 50%;
-	width: 14.0625rem;
-	aspect-ratio: 1/1;
-	margin: 0 auto;
+}
+
+._about-name {
+	margin: 0 0 0.35em;
+	font-size: 2rem;
+}
+
+._about-role {
+	margin: 0 0 1em;
+	font-style: italic;
+}
+
+._about-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1.4rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+._about-links a {
+	text-decoration: none;
+	border-block-end: var(--border-shorthand);
+}
+
+@media (hover: hover) {
+	._about-links a:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+}
+
+/* Body */
+
+.__about-body {
+	max-width: 46rem;
+}
+
+.__about-body h3 {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-secondary);
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--accent);
+}
+
+._about-interests {
+	padding-inline-start: 1.2em;
+}
+
+@media (max-width: 36rem) {
+	.__about-intro {
+		flex-direction: column;
+		text-align: center;
+		gap: 1.5rem;
+	}
+
+	._about-links {
+		justify-content: center;
+	}
 }
