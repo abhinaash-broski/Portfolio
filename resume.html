@@ -99,10 +99,11 @@
 						<h4>Image Compression Using Singular Value Decomposition</h4>
 						<span class="_entry-date">May 2025 – Jul 2025</span>
 					</div>
-					<p class="_entry-meta">Mathematics seminar project</p>
+					<p class="_entry-meta">Mathematics seminar project &middot; <a class="_entry-link" href="https://github.com/abhinaash-broski/Greyscale-Image-Compression-Using-SVD" target="_blank" rel="noopener">Code on GitHub</a></p>
 					<ul>
-						<li>Applied truncated SVD to lossy grayscale image compression, grounded in the Eckart–Young–Mirsky theorem on optimal low-rank approximation in the Frobenius norm.</li>
-						<li>Built the pipeline in Python (NumPy, OpenCV) with rank selection by energy preservation, reaching compression ratios up to 17:1 on 512×512 images, evaluated with PSNR and SSIM.</li>
+						<li>Applied truncated SVD to lossy greyscale image compression, grounded in the Eckart–Young–Mirsky theorem, and verified its error formula numerically.</li>
+						<li>Built a Python (NumPy) compression module and command-line tool with unit tests, choosing the rank by energy retained and PSNR. A 360×360 image is stored with 9× fewer values at 33.5 dB.</li>
+						<li>Analysed when the method fails (random noise vs. structured patterns) and compared it with JPEG.</li>
 					</ul>
 				</div>
 
